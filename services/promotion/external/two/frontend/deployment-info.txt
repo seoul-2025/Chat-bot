@@ -1,0 +1,6 @@
+STACK_NAME=demo-two
+S3_BUCKET=demo-two-frontend
+CLOUDFRONT_ID=E3MHYD0VDY38FT
+CLOUDFRONT_URL=https://d1cmfydnpvk4up.cloudfront.net
+REGION=us-east-1
+DEPLOYED_AT=2025년 10월 13일 월요일 07시 56분 59초 KST

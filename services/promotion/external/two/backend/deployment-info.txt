@@ -1,0 +1,25 @@
+
+========================================
+Lambda 코드 배포 완료
+========================================
+배포 시간: 2025년 10월 13일 07시 53분 46초 KST
+
+배포 결과: 6/6 함수 성공
+
+WebSocket Lambda 함수:
+  - demo-websocket-connect-two (Connect 핸들러)
+  - demo-websocket-disconnect-two (Disconnect 핸들러)
+  - demo-websocket-message-two (Message 핸들러)
+
+REST API Lambda 함수:
+  - demo-conversation-api-two (대화 관리)
+  - demo-prompt-crud-two (프롬프트 CRUD)
+  - demo-usage-handler-two (사용량 추적)
+
+환경변수 설정:
+  - 테이블: demo-*-two
+  - API 엔드포인트: 실제 URL 설정
+  - Bedrock: Claude Sonnet 4 모델
+  - 로깅: INFO 레벨, CloudWatch 활성화
+
+========================================
