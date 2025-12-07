@@ -1,46 +1,49 @@
-# bodo Service - external - two Card(s)
+# W1.SEDAILY.AI Service
 
-## Purpose
-This service provides bodo functionality for external users with two card configuration.
+보도자료 AI 서비스 (w1.sedaily.ai) 소스 코드
 
-## Card Configuration
-- **Number of cards**: two
-- **Target audience**: external
-- **Service type**: bodo
+## 🚀 Quick Start
 
-## API Endpoint
-`POST /bodo/external/two`
-
-## Request Format
-```json
-{
-  "text": "Input text for processing",
-  "options": {}
-}
-```
-
-## Response Format
-```json
-{
-  "service": "bodo",
-  "audience": "external", 
-  "cards": "two",
-  "result": "Processed result"
-}
-```
-
-## Development
 ```bash
-# Install dependencies
-npm install
+cd w1-scripts
 
-# Deploy to dev
-serverless deploy --stage dev
+# 백엔드 배포 (Lambda)
+./deploy-backend.sh
 
-# Deploy to production
-serverless deploy --stage prod
+# 프론트엔드 배포 (React)
+./deploy-frontend.sh
+
+# 서비스 테스트
+./test-service.sh
+
+# 로그 확인
+./monitor-logs.sh
 ```
 
-## Prompts
-- `prompts/system.txt`: System prompt for AI model
-- `prompts/user.txt`: User prompt template
+## 📁 Structure
+
+```
+b1(bodo)/
+├── w1-scripts/          # 배포 스크립트
+│   ├── deploy-backend.sh
+│   ├── deploy-frontend.sh
+│   ├── monitor-logs.sh
+│   └── test-service.sh
+├── backend/             # Lambda 코드
+├── frontend/            # React 앱
+└── config/              # 설정 파일
+```
+
+## 🔑 Configuration
+
+- **API Key**: AWS Secrets Manager `bodo-v1`
+- **Model**: Claude 4.5 Opus (`claude-opus-4-5-20251101`)
+- **Domain**: https://w1.sedaily.ai
+
+## 📝 Notes
+
+- w1.sedaily.ai 서비스 전용
+- 다른 서비스 (b1, g2, nx) 무시
+- 모든 스크립트는 w1-scripts/ 폴더에 있음
+
+자세한 내용: [w1-scripts/README.md](w1-scripts/README.md)

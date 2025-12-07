@@ -1,0 +1,2 @@
+const s="https://razlubfzw1.execute-api.us-east-1.amazonaws.com/prod",t="wss://5c6e29dg50.execute-api.us-east-1.amazonaws.com/prod",E=!1,I=!0,o="11",a="tem_",c="ai@sedaily.com",e={}.VITE_COMPANY_DOMAIN||"",_={API_BASE_URL:s,WS_URL:t,IS_DEVELOPMENT:!1,IS_PRODUCTION:!0,DEFAULT_ENGINE:o,STORAGE_PREFIX:a,ADMIN_EMAIL:c,COMPANY_DOMAIN:e};export{c as ADMIN_EMAIL,s as API_BASE_URL,e as COMPANY_DOMAIN,o as DEFAULT_ENGINE,E as IS_DEVELOPMENT,I as IS_PRODUCTION,a as STORAGE_PREFIX,t as WS_URL,_ as default};
+//# sourceMappingURL=config-1594e6a6.js.map
