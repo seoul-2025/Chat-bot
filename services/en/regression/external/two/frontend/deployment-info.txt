@@ -1,0 +1,6 @@
+STACK_NAME=er1-two
+S3_BUCKET=er1-two-frontend
+CLOUDFRONT_ID=E1GBXEKACHWNG4
+CLOUDFRONT_URL=https://d113wuxty96f1n.cloudfront.net
+REGION=us-east-1
+DEPLOYED_AT=2025년 10월 17일 금요일 00시 05분 11초 KST

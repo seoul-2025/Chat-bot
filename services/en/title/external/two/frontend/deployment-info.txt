@@ -1,0 +1,6 @@
+STACK_NAME=tf1-two
+S3_BUCKET=tf1-two-frontend
+CLOUDFRONT_ID=E153AF4KR4L7MZ
+CLOUDFRONT_URL=https://d2pyjmm05woq4v.cloudfront.net
+REGION=us-east-1
+DEPLOYED_AT=2025년 10월 16일 목요일 09시 48분 35초 KST
