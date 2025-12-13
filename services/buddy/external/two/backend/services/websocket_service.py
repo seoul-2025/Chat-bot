@@ -349,16 +349,9 @@ class WebSocketService:
                     total_response += chunk
                     yield chunk
 
-            # AI 응답을 대화에 저장
-            if total_response:
-                self.conversation_manager.save_message(
-                    conversation_id=conversation_id,
-                    role='assistant',
-                    content=total_response,
-                    engine_type=engine_type,
-                    user_id=user_id
-                )
-                logger.info(f"AI response saved: {len(total_response)} chars")
+            # AI 응답 저장은 message.py에서 처리하므로 여기서는 제거
+            # 중복 저장 방지를 위해 주석 처리
+            logger.info(f"AI response completed: {len(total_response)} chars (저장은 message.py에서 처리)")
 
         except Exception as e:
             logger.error(f"Error streaming response: {str(e)}")

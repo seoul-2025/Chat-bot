@@ -182,7 +182,7 @@ class WebSocketService {
     return chunks;
   }
 
-  // 메시지 전송 (청크 지원) - 매개변수 순서 정정
+  // 메시지 전송 (청크 지원)
   sendMessage(
     message,
     engineType = "11",

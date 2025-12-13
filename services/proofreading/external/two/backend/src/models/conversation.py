@@ -67,7 +67,7 @@ class Conversation:
         return cls(
             conversation_id=data['conversationId'],
             user_id=data['userId'],
-            engine_type=data['engineType'],
+            engine_type=data.get('engineType', 'Basic'),
             title=data.get('title'),
             messages=messages,
             created_at=data.get('createdAt'),

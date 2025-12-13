@@ -17,8 +17,8 @@ REGION="us-east-1"
 
 # 현재 디렉토리 확인
 CURRENT_DIR=$(pwd)
-if [[ ! "$CURRENT_DIR" == *"nexus-template-p2"* ]]; then
-    echo "❌ nexus-template-p2 프로젝트 디렉토리에서 실행해주세요."
+if [[ ! "$CURRENT_DIR" == *"buddy/external/two"* ]]; then
+    echo "❌ buddy/external/two 프로젝트 디렉토리에서 실행해주세요."
     exit 1
 fi
 

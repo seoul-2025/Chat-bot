@@ -91,84 +91,30 @@ def handler(event, context):
             if not user_id:
                 return APIResponse.error('userId is required', 400)
             
-            # conversationId가 있으면 기존 대화가 있는지 확인하고 메시지 전체 교체
+            # conversationId가 있으면 기존 대화가 있는지 확인
             if conversation_id:
                 existing = conversation_service.get_conversation(conversation_id)
                 if existing:
-                    # 기존 대화가 있으면 전체 메시지를 새로운 것으로 교체
-                    logger.info(f"Conversation {conversation_id} already exists, replacing all messages")
-                    logger.info(f"New messages count: {len(messages)}, Old messages count: {len(existing.messages)}")
-                    
-                    # repository의 update_messages를 직접 호출하여 전체 메시지 교체
-                    from src.models import Message
-                    messages_to_save = []
-                    for msg in messages:
-                        messages_to_save.append(Message(
-                            role=msg.get('role', 'user'),
-                            content=msg.get('content', ''),
-                            timestamp=msg.get('timestamp') or datetime.now(timezone.utc).isoformat(),
-                            metadata=msg.get('metadata', {})
-                        ))
-                    
-                    # 메시지 업데이트
-                    success = conversation_service.repository.update_messages(
-                        conversation_id, 
-                        messages_to_save,
-                        user_id=user_id
-                    )
-                    
-                    if success:
-                        logger.info(f"Successfully updated conversation {conversation_id} with {len(messages)} messages")
-                    
-                    # 업데이트된 대화 반환
-                    updated = conversation_service.get_conversation(conversation_id)
-                    return APIResponse.success(updated.to_dict() if updated else {
+                    # 기존 대화가 있으면 무시 (이미 저장됨)
+                    logger.info(f"Conversation {conversation_id} already exists, skipping save")
+                    return APIResponse.success({
                         'conversationId': conversation_id,
                         'userId': user_id,
                         'engineType': engine_type,
                         'title': existing.title if existing else title,
-                        'message': 'Conversation updated'
+                        'message': 'Conversation already exists'
                     }, 200)
             
-            # 새 대화 생성 (conversationId 전달)
+            # 새 대화 생성
             saved = conversation_service.create_conversation(
                 user_id=user_id,
                 engine_type=engine_type,
                 title=title,
-                initial_message=initial_message,
-                conversation_id=conversation_id  # 프론트엔드에서 제공한 ID 사용
+                initial_message=initial_message
             )
             
-            # 모든 메시지가 있으면 업데이트
-            if len(messages) > 1:
-                logger.info(f"New conversation created with ID {saved.conversation_id}, adding {len(messages)} messages")
-                from src.models import Message
-                messages_to_save = []
-                for msg in messages:
-                    messages_to_save.append(Message(
-                        role=msg.get('role', 'user'),
-                        content=msg.get('content', ''),
-                        timestamp=msg.get('timestamp') or datetime.now(timezone.utc).isoformat(),
-                        metadata=msg.get('metadata', {})
-                    ))
-                
-                # 메시지 업데이트
-                success = conversation_service.repository.update_messages(
-                    saved.conversation_id,
-                    messages_to_save,
-                    user_id=user_id
-                )
-                
-                if success:
-                    logger.info(f"Successfully added {len(messages)} messages to new conversation {saved.conversation_id}")
-                else:
-                    logger.error(f"Failed to add messages to new conversation {saved.conversation_id}")
-                
-                # 업데이트된 대화 다시 조회
-                saved = conversation_service.get_conversation(saved.conversation_id)
-            
             # to_dict 메서드로 변환하여 반환
-            return APIResponse.success(saved.to_dict() if saved else {}, 201)
+            return APIResponse.success(saved.to_dict(), 201)
         
         # PATCH /conversations/{conversationId} - 대화 부분 업데이트 (제목 수정 등)
         elif http_method == 'PATCH' and (path_params and ('conversationId' in path_params or 'id' in path_params)):

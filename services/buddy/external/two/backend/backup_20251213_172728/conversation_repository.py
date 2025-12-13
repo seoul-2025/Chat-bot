@@ -47,21 +47,33 @@ class ConversationRepository:
             logger.error(f"Error saving conversation: {str(e)}")
             raise
     
-    def find_by_id(self, conversation_id: str) -> Optional[Conversation]:
+    def find_by_id(self, conversation_id: str, user_id: str = None) -> Optional[Conversation]:
         """ID로 대화 조회"""
         try:
-            # conversationId-index GSI를 사용하여 조회
-            response = self.table.query(
-                IndexName='conversationId-index',
-                KeyConditionExpression='conversationId = :cid',
-                ExpressionAttributeValues={':cid': conversation_id}
+            # user_id가 제공되지 않은 경우 조회
+            if not user_id:
+                # conversation_id로 먼저 스캔해서 실제 데이터를 찾음
+                response = self.table.scan(
+                    FilterExpression='conversationId = :cid',
+                    ExpressionAttributeValues={':cid': conversation_id}
+                )
+                if response.get('Items'):
+                    return Conversation.from_dict(response['Items'][0])
+                return None
+
+            # user_id가 제공된 경우 직접 조회
+            response = self.table.get_item(
+                Key={
+                    'userId': user_id,
+                    'conversationId': conversation_id
+                }
             )
-            
-            if response.get('Items'):
-                return Conversation.from_dict(response['Items'][0])
-            
+
+            if 'Item' in response:
+                return Conversation.from_dict(response['Item'])
+
             return None
-            
+
         except Exception as e:
             logger.error(f"Error finding conversation by id: {str(e)}")
             raise
@@ -72,26 +84,24 @@ class ConversationRepository:
             conversations = []
             last_evaluated_key = None
             
-            # ConversationsByDate GSI를 사용하여 조회
+            # 인덱스가 없는 경우 Scan 사용 (임시 해결책)
             while True:
-                query_params = {
-                    'IndexName': 'ConversationsByDate',
-                    'KeyConditionExpression': 'userId = :userId',
+                scan_params = {
+                    'FilterExpression': 'userId = :userId',
                     'ExpressionAttributeValues': {
                         ':userId': user_id
-                    },
-                    'ScanIndexForward': False  # 최신순 정렬
+                    }
                 }
-                
+
                 # limit이 지정되면 해당 개수만큼만 조회
                 if limit and limit < 1000:
-                    query_params['Limit'] = limit
-                
+                    scan_params['Limit'] = limit * 10  # Scan은 필터링 후 적용되므로 더 많이 가져옴
+
                 # 다음 페이지가 있으면 계속 조회
                 if last_evaluated_key:
-                    query_params['ExclusiveStartKey'] = last_evaluated_key
-                
-                response = self.table.query(**query_params)
+                    scan_params['ExclusiveStartKey'] = last_evaluated_key
+
+                response = self.table.scan(**scan_params)
                 
                 # 현재 페이지의 결과 추가
                 for item in response.get('Items', []):
@@ -114,19 +124,18 @@ class ConversationRepository:
     def update_messages(self, conversation_id: str, messages: List[Message]) -> bool:
         """대화의 메시지 업데이트"""
         try:
-            # 먼저 userId를 찾기 위해 GSI로 조회
-            response = self.table.query(
-                IndexName='conversationId-index',
-                KeyConditionExpression='conversationId = :cid',
+            # user_id를 먼저 찾음
+            response = self.table.scan(
+                FilterExpression='conversationId = :cid',
                 ExpressionAttributeValues={':cid': conversation_id}
             )
-            
+
             if not response.get('Items'):
                 logger.error(f"Conversation not found: {conversation_id}")
                 return False
-            
+
             user_id = response['Items'][0].get('userId')
-            
+
             messages_data = [
                 {
                     'role': msg.role,
@@ -136,7 +145,7 @@ class ConversationRepository:
                 }
                 for msg in messages
             ]
-            
+
             self.table.update_item(
                 Key={
                     'userId': user_id,
@@ -148,31 +157,35 @@ class ConversationRepository:
                     ':updatedAt': datetime.now().isoformat()
                 }
             )
-            
+
             logger.info(f"Messages updated for conversation: {conversation_id}")
             return True
-            
+
         except Exception as e:
             logger.error(f"Error updating messages: {str(e)}")
             raise
     
-    def update_title(self, conversation_id: str, title: str) -> bool:
+    def update_title(self, conversation_id: str, title: str, user_id: str = None) -> bool:
         """대화 제목 업데이트"""
         try:
-            # 먼저 userId를 찾기 위해 GSI로 조회
-            response = self.table.query(
-                IndexName='conversationId-index',
-                KeyConditionExpression='conversationId = :cid',
-                ExpressionAttributeValues={':cid': conversation_id}
-            )
-            
-            if not response.get('Items'):
-                logger.error(f"Conversation not found: {conversation_id}")
-                return False
-            
-            user_id = response['Items'][0].get('userId')
-            
-            self.table.update_item(
+            logger.info(f"Attempting to update title for conversation: {conversation_id} to: {title}")
+
+            # user_id가 제공되지 않은 경우 조회
+            if not user_id:
+                # conversation_id로 먼저 스캔해서 실제 userId를 찾음
+                response = self.table.scan(
+                    FilterExpression='conversationId = :cid',
+                    ExpressionAttributeValues={':cid': conversation_id}
+                )
+
+                if not response.get('Items'):
+                    logger.error(f"Conversation not found: {conversation_id}")
+                    return False
+
+                user_id = response['Items'][0].get('userId')
+                logger.info(f"Found userId: {user_id} for conversation: {conversation_id}")
+
+            response = self.table.update_item(
                 Key={
                     'userId': user_id,
                     'conversationId': conversation_id
@@ -181,42 +194,47 @@ class ConversationRepository:
                 ExpressionAttributeValues={
                     ':title': title,
                     ':updatedAt': datetime.now().isoformat()
-                }
+                },
+                ReturnValues='UPDATED_NEW'
             )
-            
-            logger.info(f"Title updated for conversation: {conversation_id}")
+
+            logger.info(f"DynamoDB update response: {response}")
+            logger.info(f"Title successfully updated for conversation: {conversation_id}")
             return True
-            
+
         except Exception as e:
-            logger.error(f"Error updating title: {str(e)}")
+            logger.error(f"Error updating title for {conversation_id}: {str(e)}")
+            logger.error(f"Exception type: {type(e).__name__}")
             raise
     
-    def delete(self, conversation_id: str) -> bool:
+    def delete(self, conversation_id: str, user_id: str = None) -> bool:
         """대화 삭제"""
         try:
-            # 먼저 userId를 찾기 위해 GSI로 조회
-            response = self.table.query(
-                IndexName='conversationId-index',
-                KeyConditionExpression='conversationId = :cid',
-                ExpressionAttributeValues={':cid': conversation_id}
-            )
-            
-            if not response.get('Items'):
-                logger.error(f"Conversation not found: {conversation_id}")
-                return False
-            
-            user_id = response['Items'][0].get('userId')
-            
+            # user_id가 제공되지 않은 경우 조회
+            if not user_id:
+                # conversation_id로 먼저 스캔해서 실제 userId를 찾음
+                response = self.table.scan(
+                    FilterExpression='conversationId = :cid',
+                    ExpressionAttributeValues={':cid': conversation_id}
+                )
+
+                if not response.get('Items'):
+                    logger.error(f"Conversation not found: {conversation_id}")
+                    return False
+
+                user_id = response['Items'][0].get('userId')
+                logger.info(f"Found userId: {user_id} for conversation: {conversation_id}")
+
             self.table.delete_item(
                 Key={
                     'userId': user_id,
                     'conversationId': conversation_id
                 }
             )
-            
+
             logger.info(f"Conversation deleted: {conversation_id}")
             return True
-            
+
         except Exception as e:
             logger.error(f"Error deleting conversation: {str(e)}")
             raise

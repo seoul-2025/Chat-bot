@@ -12,6 +12,7 @@ import {
   autoSaveConversation,
   getConversation,
 } from '../services/conversationService';
+import conversationService from '../services/conversationService';
 import { updateLocalUsage, fetchUsageFromServer } from '../services/usageService';
 import * as usageService from '../services/usageService';
 
@@ -23,19 +24,30 @@ export const useChat = (initialMessage, selectedEngine = "11") => {
   // URL에서 conversationId를 명시적으로 확인
   const urlConversationId = conversationId || window.location.pathname.split('/').pop();
   
-  // 상태 관리
+  // 상태 관리 - conversationId 생성 로직 개선
   const [currentConversationId, setCurrentConversationId] = useState(() => {
+    // URL에 명시적인 conversationId가 있으면 사용
     if (urlConversationId && urlConversationId !== 'chat') {
       return urlConversationId;
     }
     
+    // 기존 대화가 진행 중이면 재사용
     const pendingId = localStorage.getItem('pendingConversationId');
     if (pendingId) {
       localStorage.removeItem('pendingConversationId');
       return pendingId;
     }
     
-    return `${selectedEngine}_${Date.now()}`;
+    // 현재 세션에서 진행 중인 대화가 있으면 재사용
+    const sessionId = sessionStorage.getItem('currentConversationId');
+    if (sessionId) {
+      return sessionId;
+    }
+    
+    // 완전히 새로운 경우에만 UUID 생성
+    const newId = crypto.randomUUID();
+    sessionStorage.setItem('currentConversationId', newId);
+    return newId;
   });
   
   const [messages, setMessages] = useState([]);
@@ -51,11 +63,15 @@ export const useChat = (initialMessage, selectedEngine = "11") => {
   const messagesEndRef = useRef(null);
   const currentConversationIdRef = useRef(currentConversationId);
   
-  // currentConversationId가 변경될 때마다 ref도 업데이트
+  // currentConversationId가 변경될 때마다 ref와 세션 스토리지도 업데이트
   useEffect(() => {
     currentConversationIdRef.current = currentConversationId;
+    // 세션 스토리지에도 저장하여 탭 간 공유
+    if (currentConversationId) {
+      sessionStorage.setItem('currentConversationId', currentConversationId);
+    }
   }, [currentConversationId]);
-  const loadedConversationsRef = useRef(new Set());
+  // loadedConversationsRef 제거 - 대화 전환 시 항상 새로 불러오도록 변경
   const streamingTimeoutRef = useRef(null);
   const messageIdCounterRef = useRef(0);
   
@@ -103,17 +119,26 @@ export const useChat = (initialMessage, selectedEngine = "11") => {
         
         setMessages(prevMessages => {
           const newMessages = [...prevMessages, assistantMessage];
-          
-          // 대화 자동 저장 - 실제 메시지 배열 사용
-          autoSaveConversation({
+          const conversationData = {
             conversationId: currentConversationIdRef.current,
-            userId: localStorage.getItem("userInfo") ? JSON.parse(localStorage.getItem("userInfo")).username : "anonymous",
+            userId: conversationService.getUserId(),
             engineType: selectedEngine,
             messages: newMessages,
             title: newMessages[0]?.content?.substring(0, 50) || "새 대화",
             createdAt: newMessages[0]?.timestamp || new Date().toISOString(),
             updatedAt: new Date().toISOString()
-          });
+          };
+          
+          // 첫 번째 대화(메시지가 2개일 때: user + assistant)일 때만 서버에 저장
+          if (newMessages.length === 2 && !hasResponded) {
+            // 처음 대화 생성 시에만 서버에 저장
+            conversationService.saveConversation(conversationData)
+              .then(() => console.log("✅ 첫 대화 서버 저장 완료"))
+              .catch(err => console.error("❌ 첫 대화 서버 저장 실패:", err));
+          } else {
+            // 이후 메시지는 localStorage에만 저장
+            conversationService.saveToLocalStorage(conversationData);
+          }
           
           return newMessages;
         });
@@ -124,7 +149,7 @@ export const useChat = (initialMessage, selectedEngine = "11") => {
     setIsLoading(false);
     setHasResponded(true);
     setStreamingShouldEnd(false);
-  }, [selectedEngine]);
+  }, [selectedEngine, hasResponded]);
   
   // 메시지 전송
   const sendMessage = useCallback(async () => {
@@ -163,14 +188,14 @@ export const useChat = (initialMessage, selectedEngine = "11") => {
     setStreamingMessage("");
     setStreamingShouldEnd(false);
     
-    // WebSocket으로 메시지 전송
-    sendChatMessage({
-      content: trimmedInput,
-      timestamp: timestamp,
-      conversationId: currentConversationIdRef.current,
-      messageHistory: messages,
-      engine: selectedEngine,
-    });
+    // WebSocket으로 메시지 전송 - 올바른 매개변수 순서로 수정
+    sendChatMessage(
+      trimmedInput,                           // message
+      selectedEngine,                         // engineType  
+      messages,                              // conversationHistory
+      currentConversationIdRef.current,      // conversationId
+      null                                   // idempotencyKey
+    );
     
     // 사용자 메시지는 저장하지 않음 - AI 응답 완료 시에만 저장
     // 중복 저장 방지를 위해 여기서는 제거
@@ -182,12 +207,12 @@ export const useChat = (initialMessage, selectedEngine = "11") => {
   
   // 대화 불러오기
   const loadConversation = useCallback(async (convId) => {
-    if (!convId || convId === 'chat' || loadedConversationsRef.current.has(convId)) {
+    if (!convId || convId === 'chat') {
       return;
     }
     
+    // 현재 대화와 동일한 경우에도 새로 불러오기 (대화 전환 시 필요)
     setIsLoadingConversation(true);
-    loadedConversationsRef.current.add(convId);
     
     try {
       const conversation = await getConversation(convId);
@@ -196,6 +221,9 @@ export const useChat = (initialMessage, selectedEngine = "11") => {
         console.log("📚 Loading messages:", conversation.messages.length, conversation.messages);
         setMessages(conversation.messages);
         setHasResponded(true);
+        // 성공적으로 로드된 대화 ID 업데이트
+        setCurrentConversationId(convId);
+        currentConversationIdRef.current = convId;
       }
     } catch (error) {
       console.error("대화 불러오기 실패:", error);
@@ -204,11 +232,15 @@ export const useChat = (initialMessage, selectedEngine = "11") => {
     }
   }, []);
   
-  // 새 대화 시작
+  // 새 대화 시작 - 세션 스토리지도 업데이트
   const startNewConversation = useCallback(() => {
-    const newId = `${selectedEngine}_${Date.now()}`;
+    const newId = crypto.randomUUID();
     setCurrentConversationId(newId);
     currentConversationIdRef.current = newId;
+    
+    // 세션 스토리지 업데이트
+    sessionStorage.setItem('currentConversationId', newId);
+    
     setMessages([]);
     setInput("");
     setStreamingMessage(null);
@@ -249,10 +281,11 @@ export const useChat = (initialMessage, selectedEngine = "11") => {
   
   // conversationId 변경 감지
   useEffect(() => {
-    if (urlConversationId && urlConversationId !== 'chat' && urlConversationId !== currentConversationId) {
+    if (urlConversationId && urlConversationId !== 'chat') {
+      // URL의 conversationId가 변경되면 항상 새로 불러오기
       loadConversation(urlConversationId);
     }
-  }, [urlConversationId, currentConversationId, loadConversation]);
+  }, [urlConversationId, loadConversation]);
   
   // 초기 메시지 처리
   useEffect(() => {

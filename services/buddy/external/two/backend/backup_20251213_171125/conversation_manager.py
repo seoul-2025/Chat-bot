@@ -49,33 +49,16 @@ class ConversationManager:
                 item = response['Item']
                 messages = item.get('messages', [])
                 
-                # 중복 메시지 확인 - 개선된 알고리즘
-                # 1. 최근 5개 메시지에서 확인 (기존 3개에서 확장)
-                recent_messages = messages[-5:] if len(messages) > 5 else messages
+                # 중복 메시지 확인 (최근 3개 메시지 중에서)
+                recent_messages = messages[-3:] if len(messages) > 3 else messages
                 is_duplicate = False
-                current_timestamp = datetime.fromisoformat(timestamp.replace('Z', '+00:00'))
-                
                 for msg in recent_messages:
-                    # 내용과 역할이 정확히 일치하고, 시간 차이가 30초 이내인 경우만 중복으로 판단
+                    # 내용과 역할이 정확히 일치하는 경우 중복으로 판단
                     if (msg.get('content') == content and 
                         msg.get('role') == role):
-                        try:
-                            msg_timestamp = datetime.fromisoformat(msg.get('timestamp', '').replace('Z', '+00:00'))
-                            time_diff = abs((current_timestamp - msg_timestamp).total_seconds())
-                            
-                            # 30초 이내에 동일한 내용이면 중복으로 판단
-                            if time_diff <= 30:
-                                logger.info(f"Duplicate message detected (same content & role within 30s), skipping: {content[:50]}")
-                                is_duplicate = True
-                                break
-                            else:
-                                logger.info(f"Similar message found but time diff is {time_diff}s, allowing")
-                        except Exception as e:
-                            # 타임스탬프 파싱 실패 시 기존 방식으로 판단
-                            logger.warning(f"Timestamp parsing failed: {e}, using basic duplicate check")
-                            if msg.get('content') == content and msg.get('role') == role:
-                                is_duplicate = True
-                                break
+                        logger.info(f"Duplicate message detected (same content & role), skipping: {content[:50]}")
+                        is_duplicate = True
+                        break
                 
                 if not is_duplicate:
                     messages.append({

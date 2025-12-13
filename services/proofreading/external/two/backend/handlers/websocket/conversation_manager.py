@@ -12,7 +12,7 @@ logger = logging.getLogger(__name__)
 
 # DynamoDB 설정
 dynamodb = boto3.resource('dynamodb', region_name='us-east-1')
-conversations_table = dynamodb.Table('nx-wt-prf-conversations')
+conversations_table = dynamodb.Table('nx-wt-prf-conversations-v2')
 
 class ConversationManager:
     """대화 내역을 DynamoDB에서 관리 (복합키 사용)"""

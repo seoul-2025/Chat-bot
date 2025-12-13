@@ -113,8 +113,8 @@ function AppContent() {
   const handleStartChat = (message) => {
     console.log("🚀 handleStartChat called with:", message);
 
-    // 새 대화 ID 생성 (엔진_타임스탬프 형식)
-    const conversationId = `${selectedEngine}_${Date.now()}`;
+    // 새 대화 ID 생성 (UUID 형식)
+    const conversationId = crypto.randomUUID();
     console.log("🆕 새 대화 ID 생성:", conversationId);
 
     // localStorage에 임시 저장 (페이지 전환 중 데이터 보존)
