@@ -375,12 +375,14 @@ class WebSocketService:
             
             # 사용량 기록
             year_month = datetime.now(timezone.utc).strftime('%Y-%m')
+            # yearMonth에 engineType 포함하여 중복 방지
+            year_month_with_engine = f"{year_month}#{engine_type.lower()}"
 
             # 원자적 업데이트
             self.usage_table.update_item(
                 Key={
                     'userId': user_id,
-                    'yearMonth': year_month
+                    'yearMonth': year_month_with_engine
                 },
                 UpdateExpression="""
                     ADD requestCount :one,
