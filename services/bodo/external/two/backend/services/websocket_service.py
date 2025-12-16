@@ -1,7 +1,7 @@
 """
 WebSocket Service
 WebSocket 메시지 처리 및 Bedrock 통합 서비스
-프롬프트 인메모리 캐싱 지원
+영구 프롬프트 인메모리 캐싱 지원 (Lambda 컨테이너 수명 동안 유지)
 """
 import json
 import boto3
@@ -26,9 +26,9 @@ logger = setup_logger(__name__)
 dynamodb = boto3.resource('dynamodb', region_name=AWS_REGION)
 prompts_table = dynamodb.Table(DYNAMODB_TABLES['prompts'])
 
-# 글로벌 프롬프트 캐시 (Lambda 컨테이너 재사용 시 유지)
-PROMPT_CACHE: Dict[str, Tuple[Dict[str, Any], float]] = {}
-CACHE_TTL = 300  # 5분 (초 단위)
+# 글로벌 프롬프트 캐시 - Lambda 컨테이너 재사용 시 유지됨 (영구 캐시)
+PROMPT_CACHE: Dict[str, Dict[str, Any]] = {}
+# TTL 제거 - Lambda 컨테이너가 살아있는 동안 영구적으로 캐시 유지
 
 
 class WebSocketService:
@@ -116,32 +116,26 @@ class WebSocketService:
 
     def _load_prompt_from_dynamodb(self, engine_type: str) -> Dict[str, Any]:
         """
-        DynamoDB에서 프롬프트와 파일 로드 (인메모리 캐싱 적용)
+        DynamoDB에서 프롬프트와 파일 로드 (영구 인메모리 캐싱 적용)
 
         캐시 히트 시 DynamoDB 조회를 완전히 생략하여 응답 속도 향상
+        Lambda 컨테이너 수명 동안 영구 유지
         """
         global PROMPT_CACHE
-        now = time.time()
 
-        # 캐시 확인
+        # 캐시 확인 (영구 캐시)
         if engine_type in PROMPT_CACHE:
-            cached_data, cached_time = PROMPT_CACHE[engine_type]
-            age = now - cached_time
+            logger.info(f"✅ Cache HIT for {engine_type} - DB query skipped (permanent cache)")
+            return PROMPT_CACHE[engine_type]
 
-            if age < CACHE_TTL:
-                logger.info(f"✅ Cache HIT for {engine_type} (age: {age:.1f}s) - DB 조회 생략")
-                return cached_data
-            else:
-                logger.info(f"⏰ Cache EXPIRED for {engine_type} (age: {age:.1f}s) - 재조회")
-        else:
-            logger.info(f"❌ Cache MISS for {engine_type} - 최초 조회")
+        logger.info(f"❌ Cache MISS for {engine_type} - fetching from DB")
 
-        # 캐시 미스 또는 만료 - DB에서 로드
+        # 캐시 미스 - DB에서 로드
         prompt_data = self._fetch_prompt_from_db(engine_type)
 
-        # 캐시 업데이트
-        PROMPT_CACHE[engine_type] = (prompt_data, now)
-        logger.info(f"💾 Cached prompt for {engine_type} "
+        # 영구 캐시 업데이트 (TTL 없음)
+        PROMPT_CACHE[engine_type] = prompt_data
+        logger.info(f"💾 Permanently cached prompt for {engine_type} "
                    f"({len(prompt_data.get('files', []))} files, "
                    f"{len(str(prompt_data))} bytes)")
 
@@ -308,6 +302,41 @@ class WebSocketService:
         except Exception as e:
             logger.error(f"Error clearing history: {str(e)}")
             return False
+    
+    @staticmethod
+    def clear_prompt_cache(engine_type: str = None):
+        """
+        프롬프트 캐시 초기화 (관리용)
+        
+        Args:
+            engine_type: 특정 엔진 타입만 삭제. None이면 전체 삭제
+        """
+        global PROMPT_CACHE
+        
+        if engine_type:
+            if engine_type in PROMPT_CACHE:
+                del PROMPT_CACHE[engine_type]
+                logger.info(f"🗑️ Cleared cache for {engine_type}")
+            else:
+                logger.info(f"No cache found for {engine_type}")
+        else:
+            cache_size = len(PROMPT_CACHE)
+            PROMPT_CACHE.clear()
+            logger.info(f"🗑️ Cleared all cache ({cache_size} entries)")
+    
+    @staticmethod
+    def get_cache_stats() -> Dict[str, Any]:
+        """캐시 통계 정보 반환"""
+        global PROMPT_CACHE
+        
+        stats = {
+            'total_entries': len(PROMPT_CACHE),
+            'engines': list(PROMPT_CACHE.keys()),
+            'cache_size_bytes': sum(len(str(data)) for data in PROMPT_CACHE.values()),
+            'permanent_cache': True  # 영구 캐시 사용 중
+        }
+        
+        return stats
 
     def track_usage(
         self,
