@@ -7,7 +7,7 @@ import boto3
 import logging
 import time
 from datetime import datetime, timezone, timedelta
-from typing import List, Dict, Any, Optional, Generator, Tuple
+from typing import List, Dict, Any, Optional, Generator
 import uuid
 import os
 import sys
@@ -20,9 +20,8 @@ from utils.logger import setup_logger
 
 logger = setup_logger(__name__)
 
-# 글로벌 캐시 - Lambda 컨테이너 재사용 시 유지됨
-PROMPT_CACHE: Dict[str, Tuple[Dict[str, Any], float]] = {}
-CACHE_TTL = 300  # 5분 (초 단위)
+# 글로벌 캐시 - Lambda 컨테이너 재사용 시 유지됨 (영구 캐시)
+PROMPT_CACHE: Dict[str, Dict[str, Any]] = {}
 
 # DynamoDB 클라이언트 - 프롬프트 테이블 접근용
 dynamodb = boto3.resource('dynamodb', region_name=AWS_REGION)
@@ -182,30 +181,23 @@ class WebSocketService:
 
     def _load_prompt_from_dynamodb(self, engine_type: str) -> Dict[str, Any]:
         """
-        DynamoDB에서 프롬프트와 파일 로드 (인메모리 캐싱 적용)
+        DynamoDB에서 프롬프트와 파일 로드 (영구 인메모리 캐싱)
         """
         global PROMPT_CACHE
-        now = time.time()
 
         # 캐시 확인
         if engine_type in PROMPT_CACHE:
-            cached_data, cached_time = PROMPT_CACHE[engine_type]
-            age = now - cached_time
+            logger.info(f"✅ Cache HIT for {engine_type} - DB query skipped")
+            return PROMPT_CACHE[engine_type]
 
-            if age < CACHE_TTL:
-                logger.info(f"✅ Cache HIT for {engine_type} (age: {age:.1f}s)")
-                return cached_data
-            else:
-                logger.info(f"⏰ Cache EXPIRED for {engine_type} (age: {age:.1f}s)")
-        else:
-            logger.info(f"❌ Cache MISS for {engine_type}")
+        logger.info(f"❌ Cache MISS for {engine_type} - fetching from DB")
 
-        # 캐시 미스 또는 만료 - DB에서 로드
+        # 캐시 미스 - DB에서 로드
         prompt_data = self._fetch_prompt_from_db(engine_type)
 
-        # 캐시 업데이트
-        PROMPT_CACHE[engine_type] = (prompt_data, now)
-        logger.info(f"💾 Cached prompt for {engine_type}")
+        # 캐시 업데이트 (영구 저장)
+        PROMPT_CACHE[engine_type] = prompt_data
+        logger.info(f"💾 Permanently cached prompt for {engine_type}")
 
         return prompt_data
 
@@ -244,7 +236,7 @@ class WebSocketService:
                     logger.error(f"Error loading files: {str(fe)}")
 
                 elapsed = (time.time() - start_time) * 1000
-                logger.info(f"🔍 DB fetch for {engine_type} in {elapsed:.0f}ms")
+                logger.info(f"🔍 DB fetch for {engine_type} in {elapsed:.0f}ms (will be cached permanently)")
 
                 return prompt_data
             else:
