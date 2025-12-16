@@ -25,7 +25,7 @@ mkdir -p package
 pip install -r requirements.txt -t package/ --quiet
 
 echo "📄 코드 복사..."
-cp -r handlers lib *.py package/ 2>/dev/null || true
+cp -r handlers lib services src utils *.py package/ 2>/dev/null || true
 
 echo "🗜️ ZIP 생성..."
 cd package

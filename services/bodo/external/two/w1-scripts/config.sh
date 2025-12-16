@@ -49,7 +49,8 @@ export SECRET_NAME="bodo-v1"
 # API Configuration
 export ANTHROPIC_MODEL="claude-opus-4-5-20251101"
 export ANTHROPIC_MAX_TOKENS="4096"
-export ANTHROPIC_TEMPERATURE="0.7"
+export ANTHROPIC_TEMPERATURE="0.3"
+export ENABLE_NATIVE_WEB_SEARCH="true"
 
 # Paths
 export BACKEND_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)/backend"

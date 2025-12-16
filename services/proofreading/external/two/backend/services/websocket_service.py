@@ -179,10 +179,15 @@ class WebSocketService:
                         conversation_context=formatted_history
                     )
                     
+                    # 웹 검색 활성화 여부 판단
+                    enable_web_search = self._should_enable_web_search(user_message)
+                    
                     for chunk in self.ai_client.stream_response(
                         user_message=user_message,
                         system_prompt=full_system_prompt,
-                        conversation_context=formatted_history
+                        conversation_context=formatted_history,
+                        enable_web_search=enable_web_search,
+                        web_search_max_uses=int(os.environ.get('WEB_SEARCH_MAX_USES', '5'))
                     ):
                         total_response += chunk
                         yield chunk
@@ -505,3 +510,56 @@ class WebSocketService:
             return "\n\n=== 이전 대화 내용 ===\n" + "\n\n".join(formatted_messages) + "\n\n=== 현재 질문 ==="
         
         return ""
+    
+    def _should_enable_web_search(self, user_message: str) -> bool:
+        """
+        사용자 메시지에서 웹 검색 활성화 필요성 분석
+        """
+        try:
+            # 환경변수로 웹 검색 기능 전역 비활성화 가능
+            if os.environ.get('ENABLE_NATIVE_WEB_SEARCH', 'true').lower() != 'true':
+                return False
+            
+            # 검색 키워드들
+            search_keywords = [
+                '최신', '오늘', '현재', '뉴스', '주가', '환율', '날씨', '트렌드',
+                '속보', '실시간', '녹색소비', '카이스트', '디스카운트', '배당락',
+                '비단등', '어디', '먹을거리', '관깑', '도시락', '매매', '알바', '일자리',
+                '새로나온', '출시', '업데이트', '대표검', '순양', '손보', '이종명',
+                '센터', '뿌리오', '로보트', '관련', 'related', 'latest', 'today', 'news', 'current'
+            ]
+            
+            # 커미션 표현들
+            action_keywords = [
+                '찾아줘', '알아줘', '서치해', '검색해', '확인해',
+                '업데이트 된', '정보', '어떻게'
+            ]
+            
+            # 키워드 매칭
+            message_lower = user_message.lower()
+            
+            # 검색 키워드 및 명령 매칭
+            for keyword in search_keywords + action_keywords:
+                if keyword in message_lower:
+                    logger.info(f"Web search enabled by keyword: {keyword}")
+                    return True
+            
+            # 특정 질문 패턴들
+            question_patterns = [
+                '예전에', '예전과', '비교', '차이', '저번과', '지난', 
+                '지난번', '전년', '전달', '전주', '전 대비', 
+                '전에 비해', '전 세대', '전과', '지나고',
+                '안 되나요', '안 돼요', '안 되는', '되지 않는', 
+                '작동안해', '메이지', '앉야', '개판', '이번', '이달', '그 전', '배경'
+            ]
+            
+            for pattern in question_patterns:
+                if pattern in message_lower:
+                    logger.info(f"Web search enabled by pattern: {pattern}")
+                    return True
+                    
+            return False
+        
+        except Exception as e:
+            logger.error(f"Error in web search keyword detection: {str(e)}")
+            return False

@@ -40,7 +40,8 @@ TEMPERATURE = 0.7
 def stream_anthropic_response(
     user_message: str,
     system_prompt: str,
-    api_key: Optional[str] = None
+    api_key: Optional[str] = None,
+    enable_web_search: bool = False
 ) -> Iterator[str]:
     """
     Anthropic API를 통한 스트리밍 응답 생성
@@ -49,6 +50,7 @@ def stream_anthropic_response(
         user_message: 사용자 메시지
         system_prompt: 시스템 프롬프트
         api_key: API 키 (없으면 환경변수 사용)
+        enable_web_search: 웹 검색 기능 활성화
     
     Yields:
         응답 텍스트 청크
@@ -80,6 +82,17 @@ def stream_anthropic_response(
             ],
             "stream": True
         }
+        
+        # 웹 검색 도구 추가
+        if enable_web_search:
+            body["tools"] = [
+                {
+                    "type": "web_search_20250305",
+                    "name": "web_search",
+                    "max_uses": 5  # 최대 5번까지 웹 검색 허용
+                }
+            ]
+            logger.info("웹 검색 기능이 활성화되었습니다")
         
         logger.info(f"Calling Anthropic API with model: {MODEL_ID}")
         
@@ -160,7 +173,8 @@ class AnthropicClient:
         self,
         user_message: str,
         system_prompt: str,
-        conversation_context: str = ""
+        conversation_context: str = "",
+        enable_web_search: bool = False
     ) -> Iterator[str]:
         """
         스트리밍 응답 생성
@@ -169,6 +183,7 @@ class AnthropicClient:
             user_message: 사용자 메시지
             system_prompt: 시스템 프롬프트
             conversation_context: 대화 컨텍스트
+            enable_web_search: 웹 검색 기능 활성화
         
         Yields:
             응답 청크
@@ -180,16 +195,46 @@ class AnthropicClient:
             else:
                 full_prompt = system_prompt
             
+            # 우수사례 적용: 날짜 정보를 user_message에 포함
+            enhanced_user_message = self._create_message_with_context(user_message, conversation_context)
+            
             logger.info(f"Streaming with Anthropic API")
             
             # Anthropic API 스트리밍
             for chunk in stream_anthropic_response(
-                user_message=user_message,
+                user_message=enhanced_user_message,  # 날짜 정보가 포함된 메시지
                 system_prompt=full_prompt,
-                api_key=self.api_key
+                api_key=self.api_key,
+                enable_web_search=enable_web_search
             ):
                 yield chunk
         
         except Exception as e:
             logger.error(f"Error in stream_response: {str(e)}")
             yield f"\n\n[오류] 응답 생성 실패: {str(e)}"
+    
+    def _create_message_with_context(self, user_message: str, conversation_context: str) -> str:
+        """대화 컨텍스트를 메시지에 포함"""
+        from datetime import datetime, timezone, timedelta
+        
+        # 한국 시간 (UTC+9)
+        kst = timezone(timedelta(hours=9))
+        current_time = datetime.now(kst)
+        
+        # 동적 컨텍스트 정보
+        context_info = f"""[현재 세션 정보]
+현재 시간: {current_time.strftime('%Y-%m-%d %H:%M:%S KST')}
+사용자 위치: 대한민국
+타임존: Asia/Seoul (KST)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+"""
+        
+        if conversation_context:
+            return f"""{context_info}{conversation_context}
+
+위의 대화 내용을 참고하여 답변해주세요.
+
+사용자의 질문: {user_message}
+"""
+        return f"""{context_info}사용자의 질문: {user_message}"""

@@ -5,8 +5,11 @@ AWS Bedrock 대신 Anthropic API를 직접 사용
 import os
 import json
 import logging
-import requests
+import urllib.request
+import urllib.parse
+import urllib.error
 import boto3
+from datetime import datetime, timezone, timedelta
 from typing import Dict, Any, Iterator, Optional
 
 logger = logging.getLogger(__name__)
@@ -17,7 +20,7 @@ secrets_client = boto3.client('secretsmanager', region_name='us-east-1')
 def get_api_key_from_secrets():
     """Secrets Manager에서 API 키 가져오기"""
     try:
-        secret_name = os.environ.get('ANTHROPIC_SECRET_NAME', 'claude-opus-45-api-key')
+        secret_name = os.environ.get('ANTHROPIC_SECRET_NAME', 'foreign-v1')
         response = secrets_client.get_secret_value(SecretId=secret_name)
         secret = json.loads(response['SecretString'])
         return secret.get('api_key', '')
@@ -26,21 +29,62 @@ def get_api_key_from_secrets():
         # 폴백: 환경변수에서 가져오기
         return os.environ.get('ANTHROPIC_API_KEY', '')
 
+def get_dynamic_context():
+    """동적 컨텍스트 생성 (현재 시간 정보 포함)"""
+    kst = timezone(timedelta(hours=9))
+    current_time = datetime.now(kst)
+    
+    context_info = f"""[현재 세션 정보]
+현재 시간: {current_time.strftime('%Y-%m-%d %H:%M:%S KST')}
+오늘 날짜: {current_time.strftime('%Y년 %m월 %d일')}"""
+    
+    return context_info
+
 # Anthropic API 설정
 ANTHROPIC_API_KEY = None  # 요청 시점에 동적으로 가져옴
 ANTHROPIC_API_URL = "https://api.anthropic.com/v1/messages"
 ANTHROPIC_VERSION = "2023-06-01"
 
 # 모델 설정
-MODEL_ID = "claude-opus-4-5-20251101"  # Claude 4.5 Opus - 최신 최고 성능 모델 (2024년 11월 출시)
-MAX_TOKENS = 4096
-TEMPERATURE = 0.7
+MODEL_ID = os.environ.get('ANTHROPIC_MODEL_ID', "claude-opus-4-5-20251101")  # Claude 4.5 Opus - 최신 최고 성능 모델
+MAX_TOKENS = int(os.environ.get('MAX_TOKENS', '4096'))
+TEMPERATURE = float(os.environ.get('TEMPERATURE', '0.3'))
+
+# 웹 검색 설정
+ENABLE_NATIVE_WEB_SEARCH = os.environ.get('ENABLE_NATIVE_WEB_SEARCH', 'true').lower() == 'true'
+WEB_SEARCH_MAX_USES = int(os.environ.get('WEB_SEARCH_MAX_USES', '5'))
+
+
+def get_dynamic_context():
+    """동적 컨텍스트 정보 생성"""
+    kst = timezone(timedelta(hours=9))
+    current_time = datetime.now(kst)
+    
+    context_info = f"""[현재 세션 정보]
+현재 시간: {current_time.strftime('%Y-%m-%d %H:%M:%S KST')}
+오늘 날짜: {current_time.strftime('%Y년 %m월 %d일')}
+사용자 위치: 대한민국
+타임존: Asia/Seoul (KST)
+
+중요: 응답 시 반드시 현재 연도 {current_time.year}년을 기준으로 작성하세요.
+"""
+    return context_info
+
+
+
+def get_dynamic_context():
+    """동적 컨텍스트 정보 생성"""
+    kst_now = datetime.now(timezone(offset=datetime.now().astimezone().utcoffset()))
+    today_str = kst_now.strftime('%Y년 %m월 %d일')
+    return f"오늘은 {today_str}입니다."
 
 
 def stream_anthropic_response(
     user_message: str,
     system_prompt: str,
-    api_key: Optional[str] = None
+    api_key: Optional[str] = None,
+    enable_web_search: bool = False,
+    web_search_max_uses: int = 5
 ) -> Iterator[str]:
     """
     Anthropic API를 통한 스트리밍 응답 생성
@@ -69,38 +113,55 @@ def stream_anthropic_response(
             "accept": "text/event-stream"
         }
         
+        # 동적 컨텍스트 추가
+        dynamic_context = get_dynamic_context()
+        enhanced_system_prompt = f"{system_prompt}\n\n{dynamic_context}"
+        
         # 요청 본문
         body = {
             "model": MODEL_ID,
             "max_tokens": MAX_TOKENS,
             "temperature": TEMPERATURE,
-            "system": system_prompt,
+            "system": enhanced_system_prompt,
             "messages": [
                 {"role": "user", "content": user_message}
             ],
             "stream": True
         }
         
+        # 웹 검색 도구 추가
+        if enable_web_search and ENABLE_NATIVE_WEB_SEARCH:
+            body["tools"] = [
+                {
+                    "type": "web_search_20250305",
+                    "name": "web_search",
+                    "max_uses": WEB_SEARCH_MAX_USES
+                }
+            ]
+            logger.info(f"Web search enabled (max uses: {WEB_SEARCH_MAX_USES})")
+        
         logger.info(f"Calling Anthropic API with model: {MODEL_ID}")
         
         # API 호출 (스트리밍)
-        response = requests.post(
+        data = json.dumps(body).encode('utf-8')
+        request = urllib.request.Request(
             ANTHROPIC_API_URL,
+            data=data,
             headers=headers,
-            json=body,
-            stream=True
+            method='POST'
         )
+        response = urllib.request.urlopen(request)
         
-        if response.status_code != 200:
-            error_msg = f"API 오류: {response.status_code} - {response.text}"
+        if response.status != 200:
+            error_msg = f"API 오류: {response.status} - {response.reason}"
             logger.error(error_msg)
             yield f"[오류] {error_msg}"
             return
         
         # 스트리밍 응답 처리
-        for line in response.iter_lines():
+        for line in response:
             if line:
-                line_text = line.decode('utf-8')
+                line_text = line.decode('utf-8').strip()
                 
                 # SSE 형식 파싱
                 if line_text.startswith('data: '):
@@ -133,7 +194,7 @@ def stream_anthropic_response(
                         logger.warning(f"Failed to parse SSE data: {e}")
                         continue
     
-    except requests.exceptions.RequestException as e:
+    except urllib.error.URLError as e:
         logger.error(f"Request error: {str(e)}")
         yield f"\n\n[오류] 네트워크 오류: {str(e)}"
     
@@ -160,7 +221,9 @@ class AnthropicClient:
         self,
         user_message: str,
         system_prompt: str,
-        conversation_context: str = ""
+        conversation_context: str = "",
+        enable_web_search: bool = False,
+        web_search_max_uses: int = 5
     ) -> Iterator[str]:
         """
         스트리밍 응답 생성
@@ -180,13 +243,15 @@ class AnthropicClient:
             else:
                 full_prompt = system_prompt
             
-            logger.info(f"Streaming with Anthropic API")
+            logger.info(f"Streaming with Anthropic API (web_search: {enable_web_search})")
             
-            # Anthropic API 스트리밍
+            # Anthropic API 스트리밍 (웹 검색 옵션 포함)
             for chunk in stream_anthropic_response(
                 user_message=user_message,
                 system_prompt=full_prompt,
-                api_key=self.api_key
+                api_key=self.api_key,
+                enable_web_search=enable_web_search,
+                web_search_max_uses=web_search_max_uses
             ):
                 yield chunk
         

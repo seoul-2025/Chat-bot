@@ -406,7 +406,9 @@ const ChatInput = forwardRef(
                     isConnected
                       ? engineType === "11"
                         ? "영문 기사 텍스트를 직접 복사해서 입력해 주세요. 엔터를 누르면 한글 기사 초안을 작성해 드립니다."
-                        : "일본어 기사 텍스트를 직접 복사해서 입력해 주세요. 엔터를 누르면 한글 기사 초안을 작성해 드립니다."
+                        : engineType === "81"
+                        ? "일본어 기사 텍스트를 직접 복사해서 입력해 주세요. 엔터를 누르면 한글 기사 초안을 작성해 드립니다."
+                        : "기사 텍스트를 직접 복사해서 입력해 주세요. 엔터를 누르면 한글 기사 초안을 작성해 드립니다."
                       : "서버 연결 중..."
                   }
                   className="w-full min-h-[1.5rem] max-h-[400px] overflow-y-auto resize-none bg-transparent border-none outline-none text-text-100 placeholder-text-500 placeholder:text-sm font-large leading-relaxed scrollbar-thin scrollbar-thumb-gray-400 scrollbar-track-transparent"

@@ -17,6 +17,7 @@ from handlers.websocket.conversation_manager import ConversationManager
 from lib.bedrock_client_enhanced import BedrockClientEnhanced
 from lib.anthropic_client import AnthropicClient  # Anthropic API 클라이언트 추가
 from lib.perplexity_client import PerplexityClient
+from lib.citation_formatter import CitationFormatter  # Citation Formatter 추가
 from utils.logger import setup_logger
 
 logger = setup_logger(__name__)
@@ -239,24 +240,32 @@ class WebSocketService:
             logger.info(f"Streaming response for engine {engine_type}")
             logger.info(f"Conversation context: {len(formatted_history)} messages")
             
-            # 웹 검색 수행 (옵션)
-            web_search_result = None
-            enable_search = os.environ.get('ENABLE_WEB_SEARCH', 'false').lower() == 'true'
+            # 웹 검색 활성화 여부 결정
+            enable_native_web_search = os.environ.get('ENABLE_NATIVE_WEB_SEARCH', 'false').lower() == 'true'
+            enable_perplexity_search = os.environ.get('ENABLE_WEB_SEARCH', 'false').lower() == 'true'
             
-            if enable_search:
+            # Perplexity를 통한 웹 검색 (기존 방식, 폴백용)
+            web_search_result = None
+            if enable_perplexity_search and not enable_native_web_search:
                 logger.info(f"🔍 Performing web search via Perplexity for: {user_message[:100]}")
                 try:
                     web_search_result = self.perplexity_client.search(user_message)
                     if web_search_result:
-                        logger.info(f"✅ Web search completed: {len(web_search_result)} chars")
+                        logger.info(f"✅ Perplexity search completed: {len(web_search_result)} chars")
                     else:
-                        logger.warning("⚠️ Web search returned no results")
+                        logger.warning("⚠️ Perplexity search returned no results")
                 except Exception as e:
-                    logger.error(f"❌ Web search failed: {str(e)}")
+                    logger.error(f"❌ Perplexity search failed: {str(e)}")
                     # 웹 검색 실패해도 계속 진행
 
             # Anthropic API 클라이언트 사용
             logger.info(f"🤖 Using Anthropic API client with engine {engine_type}")
+            
+            # 현재 날짜 로깅
+            from datetime import datetime, timezone, timedelta
+            kst = timezone(timedelta(hours=9))
+            current_time = datetime.now(kst)
+            logger.info(f"📅 Current date for response: {current_time.strftime('%Y-%m-%d %H:%M:%S KST')}")
 
             total_response = ""
 
@@ -284,7 +293,8 @@ class WebSocketService:
                 for chunk in self.anthropic_client.stream_response(
                     user_message=enhanced_message,  # 웹 검색 결과가 포함된 메시지
                     system_prompt=system_prompt,
-                    conversation_context=formatted_history
+                    conversation_context=formatted_history,
+                    enable_web_search=enable_native_web_search  # Anthropic 네이티브 웹 검색 활성화
                 ):
                     yield chunk
                     total_response += chunk
@@ -294,6 +304,34 @@ class WebSocketService:
                 error_msg = f"⚠️ 응답 처리 중 오류가 발생했습니다: {str(e)}"
                 yield error_msg
                 total_response += error_msg
+            
+
+            # Citation 포맷팅 적용 (응답 완료 후)
+            enable_citation = os.environ.get('ENABLE_CITATION_FORMATTING', 'true').lower() == 'true'
+            if enable_citation and total_response and ("http" in total_response or web_search_result):
+                try:
+                    # 웹 검색 결과에서 출처 정보 추출
+                    search_citations = []
+                    if web_search_result:
+                        search_citations = CitationFormatter.extract_citations_from_web_search(web_search_result)
+                    
+                    # Citation 포맷팅 적용
+                    formatted_response = CitationFormatter.format_response_with_citations(
+                        total_response, 
+                        search_citations
+                    )
+                    
+                    # 포맷팅이 적용된 경우에만 추가 청크 전송
+                    if formatted_response != total_response:
+                        citation_diff = formatted_response[len(total_response):]
+                        if citation_diff:
+                            yield citation_diff
+                            total_response = formatted_response
+                            logger.info("✅ Citation formatting applied")
+                    
+                except Exception as cite_error:
+                    logger.error(f"Citation formatting error: {str(cite_error)}")
+                    # Citation 오류는 무시하고 계속 진행
             
             # AI 응답을 대화에 저장
             if total_response:

@@ -86,17 +86,12 @@ def create_enhanced_system_prompt(
 거짓되거나 부정확한 정보는 심각한 사회적 피해를 초래할 수 있으므로, 아래 내용을 완벽히 이해할 때까지 반복해서 읽고 처리하세요.
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-## 🔴 [0. CURRENT CONTEXT - 현재 세션 정보]
+## 🔴 [0. CRITICAL TIME CONTEXT - 필수 시간 정보]
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-현재 시간: {{{{current_datetime}}}}
-사용자 위치: {{{{user_location}}}}
-세션 ID: {{{{session_id}}}}
-타임존: {{{{timezone}}}}
-
-※ 위 정보는 API 호출 시점에 시스템에서 자동 제공된 것입니다.
-※ 사용자가 "지금 몇 시야?" 또는 "내가 어디 있어?" 같은 질문을 하면 이 정보를 참조하세요.
-※ 시간 관련 계산이 필요할 때 이 현재 시간을 기준으로 하세요.
+⚡ 중요: 사용자 메시지 최상단에 제공되는 현재 날짜/시간 정보를 반드시 확인하세요.
+⚡ 해당 정보가 실제 현재 시간이며, 모든 시간 관련 답변의 기준점입니다.
+⚡ "오늘", "현재", "지금" 등의 표현은 제공받은 날짜를 기준으로 합니다.
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 ## 🎯 [1. IDENTITY & MISSION - 정체성과 사명]
@@ -105,6 +100,11 @@ def create_enhanced_system_prompt(
 당신은 Anthropic의 Claude Opus 4.1입니다.
 **지식 한계점: 2025년 1월 31일**까지의 신뢰할 수 있는 정보를 보유하고 있습니다.
 그 이후 정보는 반드시 "2025년 2월 이후 정보, 검증 필요"라고 명시하세요.
+
+⚠️ **날짜 표기 규칙**: 
+- 현재 시점은 user_message에 제공되는 현재 날짜 정보를 우선 참조하세요
+- "오늘", "현재" 등의 표현 사용 시 제공받은 현재 날짜를 기준으로 하세요
+- 웹 검색 결과가 있다면 검색 시점의 최신 정보를 우선하세요
 
 ### 핵심 사명
 전문 언론인에게 정확하고 신속하며 검증된 정보를 제공합니다.
@@ -616,15 +616,30 @@ class BedrockClientEnhanced:
         session_id = str(uuid.uuid4())[:8]
 
         # 현재 컨텍스트 정보 추가
-        context_info = f"""[현재 세션 정보]
-- 현재 시간: {current_datetime}
-- 위치: 대한민국
-- 타임존: Asia/Seoul (KST)
-- 세션 ID: {session_id}
+        context_info = f"""[현재 세션 정보 - 매우 중요]
+- 🕐 현재 시간: {current_datetime}
+- 📅 오늘 날짜: {current_time.strftime('%Y년 %m월 %d일')}
+- 🌏 위치: 대한민국
+- ⏰ 타임존: Asia/Seoul (KST)
+- 🆔 세션 ID: {session_id}
+
+⚠️ 중요: 날짜 관련 질문 시 위의 현재 날짜({current_time.strftime('%Y년 %m월 %d일')})를 기준으로 답변하세요.
+"""
+
+        # 자연스러운 날짜 컨텍스트
+        date_emphasis = f"""
+📅 현재 시점: {current_time.strftime('%Y년 %m월 %d일 %H시 %M분')} (한국 시간)
+⏰ 요일: {current_time.strftime('%A')}
+🌏 지역: 대한민국 (KST)
 """
 
         if conversation_context:
-            return f"""{context_info}
+            return f"""━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+⚡ 실제 현재 시간 (이것이 진짜입니다)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+{context_info}
+{date_emphasis}
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
 {conversation_context}
 
@@ -633,7 +648,12 @@ class BedrockClientEnhanced:
 사용자의 질문: {user_message}
 """
         else:
-            return f"""{context_info}
+            return f"""━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+⚡ 실제 현재 시간 (이것이 진짜입니다)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+{context_info}
+{date_emphasis}
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
 사용자의 질문: {user_message}
 """

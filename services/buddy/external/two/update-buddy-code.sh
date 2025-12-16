@@ -57,6 +57,20 @@ cd ..
 
 echo "✅ 배포 패키지 생성 완료"
 
+# 환경변수 설정
+ENVIRONMENT_VARS='{
+    "ANTHROPIC_SECRET_NAME":"buddy-v1",
+    "USE_ANTHROPIC_API":"true",
+    "USE_OPUS_MODEL":"true",
+    "ANTHROPIC_MODEL_ID":"claude-opus-4-5-20251101",
+    "SERVICE_NAME":"buddy",
+    "AI_PROVIDER":"anthropic_api",
+    "MAX_TOKENS":"4096",
+    "TEMPERATURE":"0.3",
+    "FALLBACK_TO_BEDROCK":"true",
+    "ENABLE_NATIVE_WEB_SEARCH":"true"
+}'
+
 # Lambda 함수별 업데이트
 echo ""
 echo "🔄 Lambda 함수 업데이트 시작..."
@@ -77,10 +91,23 @@ for FUNCTION_NAME in "${LAMBDA_FUNCTIONS[@]}"; do
             --region ${REGION} &>/dev/null
         
         if [ $? -eq 0 ]; then
-            echo "   ✅ ${FUNCTION_NAME} 업데이트 완료"
-            UPDATE_COUNT=$((UPDATE_COUNT + 1))
+            echo "   ✅ 코드 업데이트 완료"
+            
+            # 환경변수 업데이트
+            echo "   📝 환경변수 업데이트 중..."
+            aws lambda update-function-configuration \
+                --function-name "${FUNCTION_NAME}" \
+                --environment "Variables=${ENVIRONMENT_VARS}" \
+                --region ${REGION} &>/dev/null
+            
+            if [ $? -eq 0 ]; then
+                echo "   ✅ 환경변수 업데이트 완료"
+                UPDATE_COUNT=$((UPDATE_COUNT + 1))
+            else
+                echo "   ❌ 환경변수 업데이트 실패"
+            fi
         else
-            echo "   ❌ ${FUNCTION_NAME} 업데이트 실패"
+            echo "   ❌ 코드 업데이트 실패"
         fi
         
         # 잠시 대기 (AWS 제한 방지)
@@ -104,11 +131,12 @@ echo ""
 if [ ${UPDATE_COUNT} -eq ${TOTAL_COUNT} ]; then
     echo "✅ 모든 Lambda 함수가 성공적으로 업데이트되었습니다!"
     echo ""
-    echo "🔧 수정된 사항:"
+    echo "🔧 업데이트된 기능:"
+    echo "   • Claude Opus 4.5 모델 사용"
+    echo "   • Native 웹 검색 기능 활성화"
     echo "   • AI 응답 중복 저장 문제 해결"
     echo "   • WebSocket 매개변수 순서 정정"
     echo "   • conversationId 생성 로직 개선"
-    echo "   • 중복 체크 알고리즘 강화 (30초 기반)"
     echo ""
     echo "📋 테스트 권장 사항:"
     echo "   1. 새 대화 시작 테스트"

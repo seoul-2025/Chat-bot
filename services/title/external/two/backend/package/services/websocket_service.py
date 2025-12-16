@@ -15,6 +15,7 @@ import uuid
 from handlers.websocket.conversation_manager import ConversationManager
 from lib.bedrock_client_enhanced import BedrockClientEnhanced
 from lib.anthropic_client import AnthropicClient
+from lib.citation_formatter import CitationFormatter
 from utils.logger import setup_logger
 
 # RAG 기능 (선택적 import)
@@ -66,6 +67,7 @@ class WebSocketService:
         # Bedrock 클라이언트도 폴백용으로 유지
         self.bedrock_client = BedrockClientEnhanced()
         self.conversation_manager = ConversationManager()
+        self.citation_formatter = CitationFormatter()
         self.prompts_table = prompts_table
         self.usage_table = usage_table
         logger.info("WebSocketService initialized")
@@ -332,10 +334,13 @@ class WebSocketService:
             # AI 스트리밍 호출 (Anthropic 또는 Bedrock)
             total_response = ""
             
+            # 웹 검색 활성화 여부 확인
+            enable_web_search = os.environ.get('ENABLE_NATIVE_WEB_SEARCH', 'true').lower() == 'true'
+            
             # Anthropic API 사용 시
             if self.ai_provider == 'anthropic' and hasattr(self.ai_client, 'stream_response'):
                 try:
-                    logger.info(f"Using Anthropic API for {engine_type}")
+                    logger.info(f"Using Anthropic API for {engine_type} (web_search: {enable_web_search})")
                     
                     # 프롬프트와 대화 컨텍스트 결합
                     full_system_prompt = self._build_system_prompt(
@@ -348,7 +353,8 @@ class WebSocketService:
                     for chunk in self.ai_client.stream_response(
                         user_message=user_message,
                         system_prompt=full_system_prompt,
-                        conversation_context=formatted_history
+                        conversation_context=formatted_history,
+                        enable_web_search=enable_web_search
                     ):
                         total_response += chunk
                         yield chunk
@@ -385,6 +391,14 @@ class WebSocketService:
                 ):
                     total_response += chunk
                     yield chunk
+            
+            # 웹 검색 출처 포맷팅 적용 (Anthropic API 사용 시)
+            if total_response and self.ai_provider == 'anthropic' and enable_web_search:
+                # 출처가 자동으로 포함되지 않은 경우에만 포맷팅 적용
+                if "📚 출처:" not in total_response and "http" in total_response:
+                    formatted_response = self.citation_formatter.format_response_with_citations(total_response)
+                    total_response = formatted_response
+                    logger.info("Citation formatting applied")
             
             # AI 응답을 대화에 저장
             if total_response:

@@ -8,6 +8,7 @@ import os
 import sys
 import time
 import requests
+import uuid
 from typing import Dict, Any, Iterator, List, Optional
 from datetime import datetime, timezone, timedelta
 import boto3
@@ -36,6 +37,12 @@ TEMPERATURE = float(os.environ.get('TEMPERATURE', '0.3'))
 TOP_P = float(os.environ.get('TOP_P', '0.95'))
 TOP_K = int(os.environ.get('TOP_K', '40'))
 
+# 비용 계산 상수 (Claude Opus 4.5 기준, USD per 1M tokens)
+PRICE_INPUT = 5.0  # Base Input Tokens
+PRICE_OUTPUT = 25.0  # Output Tokens 
+PRICE_CACHE_WRITE = 10.0  # 1h Cache Writes
+PRICE_CACHE_READ = 0.50  # Cache Hits
+
 # Rate limit 설정
 RATE_LIMIT_DELAY = 1.0  # 요청 간 최소 대기 시간 (초)
 MAX_RETRIES = 3
@@ -50,6 +57,10 @@ class AnthropicClient:
         self.last_request_time = 0
         self.model_id = self._get_model_id()
         self.service_name = os.environ.get('SERVICE_NAME', 'buddy')  # 서비스 식별자
+        self.max_tokens = MAX_TOKENS
+        self.temperature = TEMPERATURE
+        # Usage 추적
+        self.last_usage = {}
         logger.info(f"AnthropicClient initialized with model: {self.model_id}, service: {self.service_name}")
     
     def _get_model_id(self) -> str:
@@ -108,7 +119,7 @@ class AnthropicClient:
             "user_id": self.service_name  # 'buddy' 서비스 식별
         }
     
-    def _make_request(self, messages: List[Dict], system: str, stream: bool = False, metadata: Optional[Dict] = None) -> Any:
+    def _make_request(self, messages: List[Dict], system: str, stream: bool = False, metadata: Optional[Dict] = None, enable_web_search: bool = False) -> Any:
         """API 요청 실행"""
         headers = {
             "x-api-key": self.api_key,
@@ -125,6 +136,17 @@ class AnthropicClient:
             "system": system,
             "stream": stream
         }
+        
+        # 웹 검색 도구 활성화 (베타 기능)
+        if enable_web_search:
+            body["tools"] = [
+                {
+                    "type": "web_search_20250305",
+                    "name": "web_search",
+                    "max_uses": 5  # 최대 5번까지 웹 검색 허용
+                }
+            ]
+            logger.info("🔍 Web search tool enabled in API request")
         
         # top_k는 선택적으로 추가 (Claude 4.5 Opus에서 지원)
         if TOP_K > 0:
@@ -187,7 +209,8 @@ class AnthropicClient:
         user_message: str,
         system_prompt: str,
         conversation_history: Optional[List[Dict]] = None,
-        enable_caching: bool = True
+        enable_caching: bool = True,
+        enable_web_search: bool = False
     ) -> Iterator[str]:
         """
         스트리밍 응답 생성 (Bedrock 인터페이스와 호환)
@@ -197,6 +220,7 @@ class AnthropicClient:
             system_prompt: 시스템 프롬프트
             conversation_history: 대화 이력
             enable_caching: 캐싱 활성화 여부 (Anthropic API는 자동 캐싱)
+            enable_web_search: 웹 검색 도구 활성화 여부
         
         Yields:
             응답 텍스트 청크
@@ -209,14 +233,18 @@ class AnthropicClient:
                 messages = conversation_history if conversation_history else []
                 messages.append({"role": "user", "content": user_message})
                 
-                logger.info(f"📤 Calling Anthropic API with model: {self.model_id}, service: {self.service_name}")
+                # 웹 검색 활성화 체크
+                use_web_search = enable_web_search or os.environ.get('ENABLE_NATIVE_WEB_SEARCH', 'false').lower() == 'true'
+                
+                logger.info(f"📤 Calling Anthropic API with model: {self.model_id}, service: {self.service_name}, web_search: {use_web_search}")
                 
                 # API 호출 (스트리밍) - 메타데이터 포함
                 response = self._make_request(
                     messages=messages,
                     system=system_prompt,
                     stream=True,
-                    metadata={"user_id": self.service_name}  # buddy 서비스 식별
+                    metadata={"user_id": self.service_name},  # buddy 서비스 식별
+                    enable_web_search=use_web_search
                 )
                 
                 # 응답 체크
@@ -302,7 +330,8 @@ class AnthropicClient:
         user_role: str = 'user',
         guidelines: Optional[str] = None,
         description: Optional[str] = None,
-        files: Optional[List[Dict]] = None
+        files: Optional[List[Dict]] = None,
+        enable_web_search: bool = False
     ) -> Iterator[str]:
         """
         Bedrock 호환 인터페이스
@@ -369,8 +398,6 @@ class AnthropicClient:
 현재 시간: {current_time.strftime('%Y-%m-%d %H:%M:%S KST')}
 사용자 위치: 대한민국
 타임존: Asia/Seoul (KST)
-
-※ 시간 관련 질문이 있으면 위의 현재 시간을 참조하세요.
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
 """

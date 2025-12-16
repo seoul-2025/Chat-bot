@@ -1,15 +1,15 @@
-# t1.sedaily.ai - Nexus AI Title Generation Service
+# t1.sedaily.ai - AI 대화 서비스
 
 ## 📋 개요
-AI 기반 제목 생성 서비스 (t1.sedaily.ai)  
-Claude Opus 4.5 API를 사용한 실시간 대화형 인터페이스
+Claude Opus 4.5 기반 실시간 AI 대화 서비스  
+웹 검색 기능이 통합된 최신 정보 제공 플랫폼
 
 ## 🏗️ 아키텍처
-- **Frontend**: React SPA (S3 + CloudFront)
-- **Backend**: Lambda Functions (Python 3.11)
-- **AI Provider**: Anthropic Claude Opus 4.5
-- **인증**: AWS Cognito
-- **데이터베이스**: DynamoDB
+- **Frontend**: React + Vite (S3 + CloudFront)
+- **Backend**: AWS Lambda (Python 3.11)
+- **AI Provider**: Anthropic Claude Opus 4.5 with Web Search
+- **Database**: DynamoDB + Aurora PostgreSQL (Vector DB)
+- **Real-time**: WebSocket API (API Gateway)
 
 ## 📁 프로젝트 구조
 ```
@@ -20,13 +20,37 @@ Claude Opus 4.5 API를 사용한 실시간 대화형 인터페이스
 │   └── lib/          # 공통 라이브러리
 ├── config/           # 환경 설정
 │   └── t1-production.env  # 프로덕션 설정
-├── logs/            # 배포 로그
-└── old-*/           # 백업 파일들
+├── upgrade-scripts/  # 아카이빙된 배포 스크립트
+└── logs/            # 배포 로그
 ```
 
-## 🚀 배포 스크립트
+## 🚀 빠른 시작
 
-### 메인 배포 스크립트
+### 배포
+```bash
+# 전체 배포
+./deploy-main.sh
+
+# 백엔드만 배포
+./deploy-backend.sh
+
+# 프론트엔드만 배포
+./deploy-frontend.sh
+```
+
+## 📚 상세 문서
+
+- **[AWS_STACK_DOCUMENTATION.md](./AWS_STACK_DOCUMENTATION.md)** - AWS 인프라 상세 문서
+- **[RESOURCE_MAP.json](./RESOURCE_MAP.json)** - 구조화된 리소스 맵핑
+
+## 🔧 주요 기능
+
+### 웹 검색 통합
+- Anthropic Claude의 네이티브 웹 검색 기능 활용
+- 실시간 최신 정보 제공 (2025년 기준)
+- 자동 출처 표시 및 신뢰도 표시
+
+### 환경 설정
 ```bash
 ./deploy-main.sh
 ```
