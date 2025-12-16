@@ -1,12 +1,14 @@
 """
 Anthropic API 직접 호출 클라이언트
 AWS Bedrock 대신 Anthropic API를 직접 사용
+Prompt Caching 최적화 적용
 """
 import os
 import json
 import logging
 import requests
 import boto3
+import uuid
 from typing import Dict, Any, Iterator, Optional
 from datetime import datetime, timezone, timedelta
 
@@ -42,20 +44,37 @@ ENABLE_WEB_SEARCH = os.environ.get('ENABLE_NATIVE_WEB_SEARCH', 'true').lower() =
 WEB_SEARCH_MAX_USES = int(os.environ.get('WEB_SEARCH_MAX_USES', '5'))
 
 
-def get_dynamic_context():
-    """동적 컨텍스트 정보 생성"""
+def _replace_template_variables(prompt: str) -> str:
+    """정적 값만 치환 (캐싱 최적화)"""
+    replacements = {
+        '{{user_location}}': '대한민국',
+        '{{timezone}}': 'Asia/Seoul (KST)'
+    }
+    
+    result = prompt
+    for key, value in replacements.items():
+        result = result.replace(key, value)
+    
+    return result
+
+
+def _create_dynamic_context() -> str:
+    """동적 컨텍스트 생성 (user_message에 추가용)"""
     kst = timezone(timedelta(hours=9))
     current_time = datetime.now(kst)
+    session_id = str(uuid.uuid4())[:8]
     
-    context_info = f"""[현재 세션 정보]
-현재 시간: {current_time.strftime('%Y-%m-%d %H:%M:%S KST')}
-오늘 날짜: {current_time.strftime('%Y년 %m월 %d일')}
-사용자 위치: 대한민국
-타임존: Asia/Seoul (KST)
-
-중요: 응답 시 반드시 현재 연도 {current_time.year}년을 기준으로 작성하세요.
+    return f"""[현재 세션 정보]
+- 현재 시간: {current_time.strftime('%Y-%m-%d %H:%M:%S KST')}
+- 오늘 날짜: {current_time.strftime('%Y년 %m월 %d일')}
+- 세션 ID: {session_id}
+- 중요: 응답 시 반드시 현재 연도 {current_time.year}년을 기준으로 작성하세요.
 """
-    return context_info
+
+
+def get_dynamic_context():
+    """동적 컨텍스트 정보 생성 (레거시 호환성)"""
+    return _create_dynamic_context()
 
 
 def stream_anthropic_response(
@@ -65,7 +84,7 @@ def stream_anthropic_response(
     enable_web_search: bool = None
 ) -> Iterator[str]:
     """
-    Anthropic API를 통한 스트리밍 응답 생성
+    Anthropic API를 통한 스트리밍 응답 생성 (Prompt Caching 적용)
     
     Args:
         user_message: 사용자 메시지
@@ -84,26 +103,34 @@ def stream_anthropic_response(
             yield "[오류] API 키가 설정되지 않았습니다."
             return
         
-        # 동적 컨텍스트 추가
-        dynamic_context = get_dynamic_context()
-        enhanced_system_prompt = f"{dynamic_context}\n\n{system_prompt}"
+        # 정적 컨텍스트는 system_prompt에, 동적 컨텍스트는 user_message에
+        static_system_prompt = _replace_template_variables(system_prompt)
+        dynamic_context = _create_dynamic_context()
+        enhanced_user_message = f"{dynamic_context}\n\n{user_message}"
         
         # 요청 헤더
         headers = {
             "x-api-key": api_key,
             "anthropic-version": ANTHROPIC_VERSION,
             "content-type": "application/json",
-            "accept": "text/event-stream"
+            "accept": "text/event-stream",
+            "anthropic-beta": "prompt-caching-2024-07-31"  # 캐싱 베타 기능 활성화
         }
         
-        # 요청 본문
+        # 프롬프트 캐싱 적용 (system만 캐싱)
         body = {
             "model": MODEL_ID,
             "max_tokens": MAX_TOKENS,
             "temperature": TEMPERATURE,
-            "system": enhanced_system_prompt,
+            "system": [
+                {
+                    "type": "text",
+                    "text": static_system_prompt,
+                    "cache_control": { "type": "ephemeral", "ttl": "1h" }  # 1시간 캐시
+                }
+            ],
             "messages": [
-                {"role": "user", "content": user_message}
+                {"role": "user", "content": enhanced_user_message}
             ],
             "stream": True
         }
@@ -181,7 +208,7 @@ def stream_anthropic_response(
 
 
 class AnthropicClient:
-    """Anthropic API 직접 호출 클라이언트"""
+    """Anthropic API 직접 호출 클라이언트 (Prompt Caching 및 비용 추적)"""
     
     def __init__(self, api_key: Optional[str] = None):
         """
@@ -192,7 +219,33 @@ class AnthropicClient:
         if not self.api_key:
             logger.warning("Anthropic API key not set")
         
-        logger.info("AnthropicClient initialized")
+        # 모델 설정
+        self.model_id = MODEL_ID
+        self.max_tokens = MAX_TOKENS
+        self.temperature = TEMPERATURE
+        
+        # Usage 추적
+        self.last_usage = {}
+        self.total_cost = 0.0
+        
+        logger.info(f"AnthropicClient initialized with model: {self.model_id}")
+    
+    def _calculate_cost(self, usage: Dict[str, int]) -> float:
+        """비용 계산 (Claude Opus 4.5 기준)"""
+        # 가격 정보 (달러 per 1M tokens)
+        PRICE_INPUT = 5.0  # Base Input Tokens
+        PRICE_OUTPUT = 25.0  # Output Tokens  
+        PRICE_CACHE_WRITE = 10.0  # 1h Cache Writes
+        PRICE_CACHE_READ = 0.50  # Cache Hits
+        
+        cost_input = (usage.get('input_tokens', 0) / 1_000_000) * PRICE_INPUT
+        cost_output = (usage.get('output_tokens', 0) / 1_000_000) * PRICE_OUTPUT
+        cost_cache_write = (usage.get('cache_creation_input_tokens', 0) / 1_000_000) * PRICE_CACHE_WRITE
+        cost_cache_read = (usage.get('cache_read_input_tokens', 0) / 1_000_000) * PRICE_CACHE_READ
+        
+        total_cost = cost_input + cost_output + cost_cache_write + cost_cache_read
+        
+        return total_cost
     
     def stream_response(
         self,
@@ -234,3 +287,104 @@ class AnthropicClient:
         except Exception as e:
             logger.error(f"Error in stream_response: {str(e)}")
             yield f"\n\n[오류] 응답 생성 실패: {str(e)}"
+    
+    def call_api_with_caching(
+        self,
+        user_message: str,
+        system_prompt: str,
+        enable_web_search: bool = None
+    ) -> Dict[str, Any]:
+        """
+        Non-streaming API 호출 with prompt caching and usage tracking
+        
+        Returns:
+            Dict with response content and usage info
+        """
+        try:
+            # API 키 확인
+            if not self.api_key:
+                return {"error": "API key not set"}
+            
+            # 정적/동적 컨텍스트 분리
+            static_system_prompt = _replace_template_variables(system_prompt)
+            dynamic_context = _create_dynamic_context()
+            enhanced_user_message = f"{dynamic_context}\n\n{user_message}"
+            
+            # 요청 헤더
+            headers = {
+                "x-api-key": self.api_key,
+                "anthropic-version": ANTHROPIC_VERSION,
+                "content-type": "application/json",
+                "anthropic-beta": "prompt-caching-2024-07-31"
+            }
+            
+            # 프롬프트 캐싱 적용
+            api_params = {
+                "model": self.model_id,
+                "max_tokens": self.max_tokens,
+                "temperature": self.temperature,
+                "messages": [{"role": "user", "content": enhanced_user_message}],
+                "system": [
+                    {
+                        "type": "text",
+                        "text": static_system_prompt,
+                        "cache_control": { "type": "ephemeral", "ttl": "1h" }
+                    }
+                ]
+            }
+            
+            # 웹 검색 도구 추가
+            if enable_web_search if enable_web_search is not None else ENABLE_WEB_SEARCH:
+                api_params["tools"] = [
+                    {
+                        "type": "web_search_20250305",
+                        "name": "web_search",
+                        "max_uses": WEB_SEARCH_MAX_USES
+                    }
+                ]
+            
+            # API 호출
+            response = requests.post(
+                ANTHROPIC_API_URL,
+                headers=headers,
+                json=api_params
+            )
+            
+            if response.status_code != 200:
+                return {"error": f"API error: {response.status_code} - {response.text}"}
+            
+            result = response.json()
+            
+            # Usage 정보 추출 및 저장
+            if 'usage' in result:
+                usage = result['usage']
+                cache_read = usage.get('cache_read_input_tokens', 0)
+                cache_write = usage.get('cache_creation_input_tokens', 0)
+                
+                self.last_usage = {
+                    'input_tokens': usage.get('input_tokens', 0),
+                    'output_tokens': usage.get('output_tokens', 0),
+                    'cache_read_input_tokens': cache_read,
+                    'cache_creation_input_tokens': cache_write
+                }
+                
+                # 비용 계산 및 로깅
+                cost = self._calculate_cost(self.last_usage)
+                self.last_usage['total_cost'] = cost
+                self.total_cost += cost
+                
+                logger.info(f"💰 API Cost: ${cost:.6f} | "
+                           f"input: {self.last_usage['input_tokens']}, "
+                           f"output: {self.last_usage['output_tokens']}, "
+                           f"cache_read: {cache_read}, cache_write: {cache_write}")
+                
+                # 캐시 효율성 로깅
+                if cache_read > 0:
+                    cache_hit_ratio = cache_read / (cache_read + cache_write) if (cache_read + cache_write) > 0 else 0
+                    logger.info(f"🎯 Cache Hit Ratio: {cache_hit_ratio:.2%}")
+            
+            return result
+            
+        except Exception as e:
+            logger.error(f"Error in call_api_with_caching: {str(e)}")
+            return {"error": str(e)}
