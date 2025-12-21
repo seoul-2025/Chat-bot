@@ -27,13 +27,15 @@ export const SERVICES_CONFIG = [
     displayName: '교열 (Nexus Writing Pro)',
     description: 'AI 기반 텍스트 교정 서비스',
     usageTable: 'nx-wt-prf-usage',
-    conversationsTable: 'nx-wt-prf-conversations',
+    dailyUsageTable: 'nx-wt-prf-dev-v2-usage-tracking', // 일별 추적 테이블
+    conversationsTable: 'nx-wt-prf-conversations-v2',
     color: '#3B82F6', // blue
     icon: '✓',
     category: 'sedaily',
     engines: ['Basic', 'Pro', 'Elite'],
-    active: true, // ✅ 90개 레코드
+    active: true,
     keyStructure: { PK: 'userId', SK: 'yearMonth' },
+    dailyKeyStructure: { PK: 'userId', SK: 'dateEngine' }, // 일별 테이블 키 구조
   },
   {
     id: 'news',

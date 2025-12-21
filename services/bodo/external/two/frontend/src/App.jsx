@@ -420,6 +420,7 @@ function AppContent() {
                   </ProtectedRoute>
                 }
               />
+              {/* Dashboard routes disabled
               <Route
                 path="/11/dashboard"
                 element={
@@ -446,6 +447,7 @@ function AppContent() {
                   </ProtectedRoute>
                 }
               />
+              */}
               <Route
                 path="/subscription"
                 element={

@@ -15,7 +15,7 @@ from decimal import Decimal
 
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from src.config.aws import AWS_REGION, DYNAMODB_TABLES
-from lib.bedrock_client_enhanced import BedrockClientEnhanced
+from lib.bedrock_client_enhanced import BedrockClientEnhanced, create_enhanced_system_prompt
 from lib.anthropic_client import AnthropicClient
 from utils.logger import setup_logger
 
@@ -34,6 +34,7 @@ class WebSocketService:
         self.conversations_table = self.dynamodb.Table(DYNAMODB_TABLES['conversations'])
         self.prompts_table = self.dynamodb.Table(DYNAMODB_TABLES['prompts'])
         self.usage_table = self.dynamodb.Table(DYNAMODB_TABLES['usage'])
+        self.daily_usage_table = self.dynamodb.Table(DYNAMODB_TABLES['daily_usage'])  # 일별 사용량 추적
         self.files_table = self.dynamodb.Table(DYNAMODB_TABLES['files'])  # 파일 테이블 추가
 
         # AI 클라이언트 초기화 (환경변수에 따라 선택)
@@ -165,12 +166,14 @@ class WebSocketService:
                 try:
                     logger.info(f"Using Anthropic API for {engine_type} with prompt caching")
                     
-                    # 프롬프트와 대화 컨텍스트 결합
+                    # 프롬프트와 대화 컨텍스트 결합 (Bedrock과 동일한 체계적 프롬프트)
                     full_system_prompt = self._build_system_prompt(
                         guidelines=prompt_data.get('instruction', ''),
                         description=prompt_data.get('description', ''),
                         files=prompt_data.get('files', []),
-                        conversation_context=formatted_history
+                        conversation_context=formatted_history,
+                        engine_type=engine_type,
+                        user_role=user_role
                     )
                     
                     # 웹 검색 활성화 여부 판단
@@ -377,19 +380,22 @@ class WebSocketService:
         output_text: str
     ) -> None:
         """
-        사용량 추적
+        사용량 추적 (월별 + 일별)
         """
         try:
             # 토큰 수 추정 (대략적인 계산)
             input_tokens = len(input_text.split()) * 2
             output_tokens = len(output_text.split()) * 2
-            
-            # 사용량 기록
-            year_month = datetime.now(timezone.utc).strftime('%Y-%m')
+            total_tokens = input_tokens + output_tokens
+
+            now = datetime.now(timezone.utc)
+            year_month = now.strftime('%Y-%m')
+            today = now.strftime('%Y-%m-%d')
+
             # yearMonth에 engineType 포함하여 중복 방지
             year_month_with_engine = f"{year_month}#{engine_type.lower()}"
 
-            # 원자적 업데이트
+            # 1. 월별 사용량 기록 (기존)
             self.usage_table.update_item(
                 Key={
                     'userId': user_id,
@@ -407,14 +413,44 @@ class WebSocketService:
                     ':one': 1,
                     ':input': input_tokens,
                     ':output': output_tokens,
-                    ':total': input_tokens + output_tokens,
+                    ':total': total_tokens,
                     ':engine': engine_type,
-                    ':now': datetime.now(timezone.utc).isoformat()
+                    ':now': now.isoformat()
                 }
             )
-            
-            logger.info(f"Usage tracked for {user_id}: {input_tokens} + {output_tokens} tokens")
-            
+
+            # 2. 일별 사용량 기록 (신규 - 대시보드 날짜 필터링용)
+            date_engine_key = f"{today}#{engine_type}"
+            self.daily_usage_table.update_item(
+                Key={
+                    'userId': user_id,
+                    'dateEngine': date_engine_key
+                },
+                UpdateExpression="""
+                    ADD inputTokens :input,
+                        outputTokens :output,
+                        totalTokens :total,
+                        messageCount :one
+                    SET #date = :date,
+                        engineType = :engine,
+                        updatedAt = :now
+                """,
+                ExpressionAttributeNames={
+                    '#date': 'date'  # 'date'는 예약어이므로 ExpressionAttributeNames 사용
+                },
+                ExpressionAttributeValues={
+                    ':one': 1,
+                    ':input': input_tokens,
+                    ':output': output_tokens,
+                    ':total': total_tokens,
+                    ':date': today,
+                    ':engine': engine_type,
+                    ':now': now.isoformat()
+                }
+            )
+
+            logger.info(f"Usage tracked for {user_id}: {input_tokens} + {output_tokens} tokens (monthly + daily)")
+
         except Exception as e:
             logger.error(f"Error tracking usage: {e}")
     
@@ -467,35 +503,33 @@ class WebSocketService:
         guidelines: str,
         description: str,
         files: List[Dict],
-        conversation_context: str
+        conversation_context: str,
+        engine_type: str = "P1",
+        user_role: str = "user"
     ) -> str:
         """
         Anthropic API용 시스템 프롬프트 구성
+        Bedrock과 동일한 체계적 프롬프트 사용
         """
-        prompt_parts = []
-        
-        # 기본 가이드라인
-        if guidelines:
-            prompt_parts.append(guidelines)
-        
-        # 설명 추가
-        if description:
-            prompt_parts.append(f"\n\n=== 추가 설명 ===\n{description}")
-        
-        # 파일 내용 추가
-        if files:
-            prompt_parts.append("\n\n=== 참고 문서 ===")
-            for file in files:
-                file_name = file.get('fileName', 'Unknown')
-                file_content = file.get('fileContent', '')
-                if file_content:
-                    prompt_parts.append(f"\n[{file_name}]\n{file_content}")
-        
-        # 대화 컨텍스트 추가
-        if conversation_context:
-            prompt_parts.append(f"\n\n{conversation_context}")
-        
-        return "\n".join(prompt_parts)
+        # prompt_data 구성
+        prompt_data = {
+            'prompt': {
+                'instruction': guidelines or "",
+                'description': description or ""
+            },
+            'files': files or [],
+            'userRole': user_role
+        }
+
+        # Bedrock과 동일한 체계적 프롬프트 생성
+        system_prompt = create_enhanced_system_prompt(
+            prompt_data=prompt_data,
+            engine_type=engine_type,
+            use_enhanced=True,
+            flexibility_level="strict"
+        )
+
+        return system_prompt
     
     def _format_conversation_for_bedrock(self, conversation_history: List[Dict]) -> str:
         """

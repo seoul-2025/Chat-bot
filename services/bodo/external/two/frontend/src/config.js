@@ -1,4 +1,4 @@
-// API 설정 - TEM1 서비스
+// API 설정 - W1 서비스 (w1.sedaily.ai)
 export const API_BASE_URL = import.meta.env.VITE_API_BASE_URL;
 export const WS_URL = import.meta.env.VITE_WS_URL;
 

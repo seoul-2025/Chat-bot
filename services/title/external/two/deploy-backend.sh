@@ -7,7 +7,7 @@
 set -e
 
 PROJECT_ROOT="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
-CONFIG_FILE="$PROJECT_ROOT/config/t1-production.env"
+CONFIG_FILE="$PROJECT_ROOT/.env.deploy"
 
 # Load configuration
 source "$CONFIG_FILE"

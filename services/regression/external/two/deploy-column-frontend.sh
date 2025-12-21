@@ -15,15 +15,18 @@ S3_BUCKET="sedaily-column-frontend"
 CLOUDFRONT_ID="EH9OF7IFDTPLW"
 REGION="us-east-1"
 
-# 현재 디렉토리 확인
-CURRENT_DIR=$(pwd)
-if [[ ! "$CURRENT_DIR" == *"sedaily_ column"* ]]; then
-    echo "❌ sedaily_column 프로젝트 디렉토리에서 실행해주세요."
+# 스크립트 위치 기준으로 디렉토리 설정
+SCRIPT_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
+FRONTEND_DIR="$SCRIPT_DIR/frontend"
+
+# frontend 디렉토리 존재 확인
+if [[ ! -d "$FRONTEND_DIR" ]]; then
+    echo "❌ frontend 디렉토리를 찾을 수 없습니다: $FRONTEND_DIR"
     exit 1
 fi
 
 # frontend 디렉토리로 이동
-cd frontend
+cd "$FRONTEND_DIR"
 
 echo "📦 의존성 설치 중..."
 npm install

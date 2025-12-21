@@ -34,36 +34,49 @@ class ConversationService {
 
   // 대화 저장
   async saveConversation(conversationData) {
+    console.log("=".repeat(50));
+    console.log("💾 [DEBUG] saveConversation 시작");
     try {
       // conversationData에 이미 userId가 있으면 그것을 사용, 없으면 this.userId 사용
       const dataToSave = {
         ...conversationData,
         userId: conversationData.userId || this.getUserId(), // getUserId() 호출하여 최신 userId 가져오기
       };
-      
-      console.log("💾 저장할 데이터:", {
+
+      console.log("💾 [DEBUG] 저장할 데이터:", {
         conversationId: dataToSave.conversationId,
         userId: dataToSave.userId,
         engineType: dataToSave.engineType,
-        messageCount: dataToSave.messages?.length
+        messageCount: dataToSave.messages?.length,
+        title: dataToSave.title
       });
-      
+
+      console.log("📡 [DEBUG] API 요청 URL:", `${API_BASE_URL}/conversations`);
+      console.log("📡 [DEBUG] API 요청 헤더:", this.getAuthHeaders());
+
       const response = await fetch(`${API_BASE_URL}/conversations`, {
         method: "POST",
         headers: this.getAuthHeaders(),
         body: JSON.stringify(dataToSave),
       });
 
+      console.log("📡 [DEBUG] API 응답 상태:", response.status, response.statusText);
+
       if (!response.ok) {
+        const errorText = await response.text();
+        console.error("❌ [DEBUG] API 응답 에러:", errorText);
         throw new Error(`Failed to save conversation: ${response.statusText}`);
       }
 
       const data = await response.json();
-      console.log("💾 대화 저장 성공:", data);
+      console.log("✅ [DEBUG] 대화 저장 성공:", data);
+      console.log("=".repeat(50));
       return data;
     } catch (error) {
-      console.error("대화 저장 실패:", error);
+      console.error("❌ [DEBUG] 대화 저장 실패:", error);
+      console.error("❌ [DEBUG] 에러 스택:", error.stack);
       // 오류 발생 시 localStorage에 백업
+      console.log("💾 [DEBUG] localStorage에 백업 저장 시도...");
       this.saveToLocalStorage(conversationData);
       throw error;
     }
@@ -71,6 +84,8 @@ class ConversationService {
 
   // 대화 목록 조회
   async listConversations(engineType = null) {
+    console.log("=".repeat(50));
+    console.log("📋 [DEBUG] listConversations 시작, engineType:", engineType);
     try {
       const currentUserId = this.getUserId(); // 최신 userId 가져오기
       const params = new URLSearchParams({
@@ -80,10 +95,11 @@ class ConversationService {
       if (engineType) {
         params.append("engineType", engineType); // engineType 파라미터 사용 (백엔드 API 스펙에 맞춤)
       }
-      
-      console.log("📋 대화 목록 조회 파라미터:", {
+
+      console.log("📋 [DEBUG] 대화 목록 조회 파라미터:", {
         userId: currentUserId,
-        engineType: engineType
+        engineType: engineType,
+        fullURL: `${API_BASE_URL}/conversations?${params}`
       });
 
       const response = await fetch(`${API_BASE_URL}/conversations?${params}`, {
@@ -91,17 +107,33 @@ class ConversationService {
         headers: this.getAuthHeaders(),
       });
 
+      console.log("📋 [DEBUG] API 응답 상태:", response.status, response.statusText);
+
       if (!response.ok) {
+        const errorText = await response.text();
+        console.error("❌ [DEBUG] API 응답 에러:", errorText);
         throw new Error(`Failed to list conversations: ${response.statusText}`);
       }
 
       const data = await response.json();
-      console.log("📋 대화 목록 조회 성공:", data);
+      console.log("✅ [DEBUG] 대화 목록 조회 성공:", {
+        totalCount: data.conversations?.length || 0,
+        conversations: data.conversations?.slice(0, 3).map(c => ({
+          id: c.conversationId,
+          title: c.title,
+          engineType: c.engineType
+        }))
+      });
+      console.log("=".repeat(50));
       return data.conversations || [];
     } catch (error) {
-      console.error("대화 목록 조회 실패:", error);
+      console.error("❌ [DEBUG] 대화 목록 조회 실패:", error);
+      console.error("❌ [DEBUG] 에러 스택:", error.stack);
       // 오류 발생 시 localStorage에서 조회
-      return this.getFromLocalStorage(engineType);
+      console.log("💾 [DEBUG] localStorage에서 대화 목록 조회 시도...");
+      const localData = this.getFromLocalStorage(engineType);
+      console.log("💾 [DEBUG] localStorage 대화 수:", localData.length);
+      return localData;
     }
   }
 

@@ -57,19 +57,8 @@ cd ..
 
 echo "✅ 배포 패키지 생성 완료"
 
-# 환경변수 설정
-ENVIRONMENT_VARS='{
-    "ANTHROPIC_SECRET_NAME":"buddy-v1",
-    "USE_ANTHROPIC_API":"true",
-    "USE_OPUS_MODEL":"true",
-    "ANTHROPIC_MODEL_ID":"claude-opus-4-5-20251101",
-    "SERVICE_NAME":"buddy",
-    "AI_PROVIDER":"anthropic_api",
-    "MAX_TOKENS":"4096",
-    "TEMPERATURE":"0.3",
-    "FALLBACK_TO_BEDROCK":"true",
-    "ENABLE_NATIVE_WEB_SEARCH":"true"
-}'
+# 환경변수 설정 (AWS CLI shorthand 형식)
+ENVIRONMENT_VARS='Variables={ANTHROPIC_SECRET_NAME=buddy-v1,USE_ANTHROPIC_API=true,USE_OPUS_MODEL=true,ANTHROPIC_MODEL_ID=claude-opus-4-5-20251101,SERVICE_NAME=buddy,AI_PROVIDER=anthropic_api,MAX_TOKENS=4096,TEMPERATURE=0.3,FALLBACK_TO_BEDROCK=true,ENABLE_NATIVE_WEB_SEARCH=true}'
 
 # Lambda 함수별 업데이트
 echo ""
@@ -81,44 +70,34 @@ TOTAL_COUNT=${#LAMBDA_FUNCTIONS[@]}
 for FUNCTION_NAME in "${LAMBDA_FUNCTIONS[@]}"; do
     echo ""
     echo "📤 ${FUNCTION_NAME} 업데이트 중..."
-    
+
     # 함수 존재 여부 확인
     if aws lambda get-function --function-name "${FUNCTION_NAME}" --region ${REGION} &>/dev/null; then
         # 코드 업데이트
         aws lambda update-function-code \
             --function-name "${FUNCTION_NAME}" \
             --zip-file fileb://deployment.zip \
-            --region ${REGION} &>/dev/null
-        
+            --region ${REGION} \
+            --output text \
+            --query 'LastModified' 2>/dev/null
+
         if [ $? -eq 0 ]; then
             echo "   ✅ 코드 업데이트 완료"
-            
-            # 환경변수 업데이트
-            echo "   📝 환경변수 업데이트 중..."
-            aws lambda update-function-configuration \
-                --function-name "${FUNCTION_NAME}" \
-                --environment "Variables=${ENVIRONMENT_VARS}" \
-                --region ${REGION} &>/dev/null
-            
-            if [ $? -eq 0 ]; then
-                echo "   ✅ 환경변수 업데이트 완료"
-                UPDATE_COUNT=$((UPDATE_COUNT + 1))
-            else
-                echo "   ❌ 환경변수 업데이트 실패"
-            fi
+
+            UPDATE_COUNT=$((UPDATE_COUNT + 1))
         else
             echo "   ❌ 코드 업데이트 실패"
         fi
-        
+
         # 잠시 대기 (AWS 제한 방지)
-        sleep 2
+        sleep 1
     else
         echo "   ⚠️  ${FUNCTION_NAME} 함수를 찾을 수 없음"
     fi
 done
 
-# 정리
-rm -rf package deployment.zip
+# 정리 (package만 삭제, deployment.zip은 유지)
+rm -rf package
 
 echo ""
 echo "========================================="

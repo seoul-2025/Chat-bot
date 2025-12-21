@@ -53,22 +53,31 @@ const ChatPage = ({
   
   // URL에서 conversationId를 명시적으로 확인
   const urlConversationId = conversationId || window.location.pathname.split('/').pop();
-  
+
+  // 엔진 경로 (11 또는 22)를 conversationId로 오해하지 않도록 체크
+  const enginePath = selectedEngine === 'T5' ? '11' : '22';
+  const isValidConversationId = urlConversationId &&
+    urlConversationId !== 'chat' &&
+    urlConversationId !== '11' &&
+    urlConversationId !== '22';
+
   console.log("🔍 URL 확인:", {
     conversationId,
     urlConversationId,
+    enginePath,
+    isValidConversationId,
     pathname: window.location.pathname,
-    hasConversationId: !!urlConversationId && urlConversationId !== 'chat',
     locationState: location.state
   });
-  
-  // URL에 conversationId가 있으면 그것을 사용, 없으면 localStorage에서 확인
+
+  // URL에 유효한 conversationId가 있으면 그것을 사용, 없으면 새로 생성
   const [currentConversationId, setCurrentConversationId] = useState(() => {
-    if (urlConversationId && urlConversationId !== 'chat') {
+    // 유효한 conversationId인 경우에만 사용 (11, 22는 엔진 경로이므로 제외)
+    if (isValidConversationId) {
       console.log("✅ URL에서 conversationId 사용:", urlConversationId);
       return urlConversationId;
     }
-    
+
     // localStorage에서 pendingConversationId 확인
     const pendingId = localStorage.getItem('pendingConversationId');
     if (pendingId) {
@@ -76,8 +85,8 @@ const ChatPage = ({
       localStorage.removeItem('pendingConversationId');
       return pendingId;
     }
-    
-    // 둘 다 없으면 새로 생성
+
+    // 새 대화인 경우 새로 생성
     const newId = `${selectedEngine}_${Date.now()}`;
     console.log("🆕 새 conversationId 생성:", newId);
     return newId;
@@ -86,14 +95,13 @@ const ChatPage = ({
   const [conversationSaved, setConversationSaved] = useState(false); // 대화 저장 여부 추적
   const [messages, setMessages] = useState(() => {
     console.log("🎯 ChatPage 초기화 - initialMessage:", initialMessage);
-    console.log("🎯 URL conversationId:", urlConversationId);
+    console.log("🎯 URL conversationId:", urlConversationId, "유효:", isValidConversationId);
 
     let hasCachedData = false;
 
-    // URL에 conversationId가 있으면 먼저 캐시에서 복원 시도
-    const enginePath = selectedEngine === 'T5' ? '11' : '22';
-    if (urlConversationId && urlConversationId !== 'chat' && urlConversationId !== enginePath) {
-      console.log("🌐 URL에서 conversationId 감지, 캐시 확인 중...");
+    // 유효한 conversationId가 있으면 먼저 캐시에서 복원 시도
+    if (isValidConversationId) {
+      console.log("🌐 URL에서 유효한 conversationId 감지, 캐시 확인 중...");
       
       // 1. localStorage에서 캐시된 대화 내용 확인
       const cacheKey = `conv:${urlConversationId}`;
@@ -187,12 +195,14 @@ const ChatPage = ({
   
   // 기존 대화 불러오기 - URL 변경 또는 새로고침 시
   useEffect(() => {
-    const loadConversationId = urlConversationId && urlConversationId !== 'chat' ? urlConversationId : null;
-    
+    // 유효한 conversationId만 로드 (11, 22는 엔진 경로이므로 제외)
+    const loadConversationId = isValidConversationId ? urlConversationId : null;
+
     console.log("🔄 대화 로딩 useEffect 트리거:", {
       loadConversationId,
       conversationId,
       urlConversationId,
+      isValidConversationId,
       currentConversationId,
       hasLocationState: !!location.state,
       hasInitialMessage: !!location.state?.initialMessage,
@@ -655,17 +665,22 @@ const ChatPage = ({
               }
 
               // AI 응답 완료 후 대화 저장 (첫 번째 대화에서만)
-              console.log("🔍 대화 저장 조건 확인:", {
-                currentConversationId,
-                hasFinalContent: !!finalContent,
-                finalContentLength: finalContent?.length,
-                conversationSaved,
-                willSave: !!(currentConversationId && finalContent && !conversationSaved)
-              });
-              
+              console.log("=".repeat(50));
+              console.log("🔍 [DEBUG] 대화 저장 조건 확인:");
+              console.log("  - currentConversationId:", currentConversationId);
+              console.log("  - isValidConversationId:", isValidConversationId);
+              console.log("  - hasFinalContent:", !!finalContent);
+              console.log("  - finalContentLength:", finalContent?.length);
+              console.log("  - conversationSaved:", conversationSaved);
+              console.log("  - selectedEngine:", selectedEngine);
+              console.log("  - willSave:", !!(currentConversationId && finalContent && !conversationSaved));
+              console.log("=".repeat(50));
+
               if (currentConversationId && finalContent && !conversationSaved) {
+                console.log("🟢 [DEBUG] 저장 조건 충족 - 저장 시작");
                 const messagesToSave = updated.filter((m) => !m.isStreaming && m.content);
-                
+                console.log("📋 [DEBUG] 저장할 메시지 수:", messagesToSave.length);
+
                 // 메시지 형식 정규화 (프론트엔드와 백엔드 호환성)
                 const normalizedMessages = messagesToSave.map(msg => ({
                   id: msg.id,
@@ -674,11 +689,13 @@ const ChatPage = ({
                   content: msg.content,
                   timestamp: msg.timestamp || new Date().toISOString()
                 }));
-                
+
                 const userInfo = JSON.parse(localStorage.getItem('userInfo') || '{}');
+                console.log("👤 [DEBUG] userInfo:", userInfo);
                 // conversationService.js와 동일한 순서로 userId 가져오기
                 const userId = userInfo.username || userInfo.userId || userInfo.email || 'anonymous';  // UUID 우선
-                
+                console.log("👤 [DEBUG] userId:", userId);
+
                 const conversationData = {
                   conversationId: currentConversationId,
                   userId: userId,
@@ -687,34 +704,40 @@ const ChatPage = ({
                   title: messagesToSave[0]?.content?.substring(0, 50) || "New Conversation",
                 };
 
-                console.log("💾 AI 응답 완료, 전체 대화 저장:", {
-                  conversationId: currentConversationId,
-                  userId: userId,
+                console.log("💾 [DEBUG] 저장 데이터:", {
+                  conversationId: conversationData.conversationId,
+                  userId: conversationData.userId,
                   engineType: conversationData.engineType,
                   messageCount: normalizedMessages.length,
-                  messages: normalizedMessages.map(m => ({
-                    role: m.role,
-                    preview: m.content.substring(0, 30) + '...'
-                  }))
+                  title: conversationData.title
                 });
 
                 import("../services/conversationService").then(
                   ({ saveConversation }) => {
+                    console.log("📡 [DEBUG] saveConversation 함수 호출 시작...");
                     saveConversation(conversationData)
                       .then((result) => {
-                        console.log("✅ 대화 저장 성공:", result);
+                        console.log("✅ [DEBUG] 대화 저장 성공:", result);
                         setConversationSaved(true); // 대화 저장됨 표시
                         // 사이드바 새로고침
+                        console.log("📢 [DEBUG] refreshSidebar 이벤트 발생시킴");
                         window.dispatchEvent(new CustomEvent("refreshSidebar"));
+                        console.log("📢 [DEBUG] refreshSidebar 이벤트 발생 완료");
                         if (onNewConversation) {
                           onNewConversation();
                         }
                       })
-                      .catch((error) =>
-                        console.error("❌ 대화 저장 실패:", error)
-                      );
+                      .catch((error) => {
+                        console.error("❌ [DEBUG] 대화 저장 실패:", error);
+                        console.error("❌ [DEBUG] 에러 상세:", error.message, error.stack);
+                      });
                   }
                 );
+              } else {
+                console.log("🔴 [DEBUG] 저장 조건 미충족 - 저장 건너뜀");
+                if (!currentConversationId) console.log("  - 이유: currentConversationId 없음");
+                if (!finalContent) console.log("  - 이유: finalContent 없음");
+                if (conversationSaved) console.log("  - 이유: 이미 저장됨 (conversationSaved=true)");
               }
 
               return updated;

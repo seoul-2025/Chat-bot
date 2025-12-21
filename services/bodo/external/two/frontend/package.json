@@ -1,8 +1,8 @@
 {
-  "name": "claude-interface-clone",
+  "name": "w1-sedaily-frontend",
   "version": "1.0.0",
   "type": "module",
-  "description": "Claude AI 웹 인터페이스 클론",
+  "description": "W1.SEDAILY.AI Press Release Service Frontend",
   "main": "index.js",
   "scripts": {
     "dev": "vite",
@@ -48,9 +48,9 @@
     "react",
     "claude",
     "ai",
-    "interface",
-    "clone"
+    "press-release",
+    "sedaily"
   ],
-  "author": "Claude Interface Clone",
-  "license": "MIT"
+  "author": "Seoul Economic Daily",
+  "license": "Proprietary"
 }

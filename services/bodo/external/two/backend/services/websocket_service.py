@@ -223,19 +223,30 @@ class WebSocketService:
             if self.ai_provider == 'anthropic' and hasattr(self.ai_client, 'stream_response'):
                 try:
                     logger.info(f"Using Anthropic API for {engine_type}")
-                    
-                    # 프롬프트와 대화 컨텍스트 결합
-                    full_system_prompt = self._build_system_prompt(
-                        guidelines=prompt_data.get('instruction', ''),
-                        description=prompt_data.get('description', ''),
-                        files=prompt_data.get('files', []),
-                        conversation_context=formatted_history
+
+                    # 체계적인 시스템 프롬프트 생성 (Bedrock과 동일한 구조 사용)
+                    from lib.bedrock_client_enhanced import create_enhanced_system_prompt
+
+                    prompt_data_for_system = {
+                        'prompt': {
+                            'instruction': prompt_data.get('instruction', ''),
+                            'description': prompt_data.get('description', '')
+                        },
+                        'files': prompt_data.get('files', []),
+                        'userRole': user_role
+                    }
+
+                    full_system_prompt = create_enhanced_system_prompt(
+                        prompt_data_for_system,
+                        engine_type,
+                        use_enhanced=True,
+                        flexibility_level="strict"
                     )
                     
                     for chunk in self.ai_client.stream_response(
                         user_message=user_message,
                         system_prompt=full_system_prompt,
-                        conversation_context=formatted_history,
+                        conversation_history=conversation_history,  # 캐싱 최적화: messages 배열로 전달
                         enable_web_search=True  # 기본적으로 웹 검색 활성화
                     ):
                         total_response += chunk
@@ -436,41 +447,6 @@ class WebSocketService:
 
         return merged
 
-    def _build_system_prompt(
-        self,
-        guidelines: str,
-        description: str,
-        files: List[Dict],
-        conversation_context: str
-    ) -> str:
-        """
-        Anthropic API용 시스템 프롬프트 구성
-        """
-        prompt_parts = []
-        
-        # 기본 가이드라인
-        if guidelines:
-            prompt_parts.append(guidelines)
-        
-        # 설명 추가
-        if description:
-            prompt_parts.append(f"\n\n=== 추가 설명 ===\n{description}")
-        
-        # 파일 내용 추가
-        if files:
-            prompt_parts.append("\n\n=== 참고 문서 ===")
-            for file in files:
-                file_name = file.get('fileName', 'Unknown')
-                file_content = file.get('fileContent', '')
-                if file_content:
-                    prompt_parts.append(f"\n[{file_name}]\n{file_content}")
-        
-        # 대화 컨텍스트 추가
-        if conversation_context:
-            prompt_parts.append(f"\n\n{conversation_context}")
-        
-        return "\n".join(prompt_parts)
-    
     def _format_conversation_for_bedrock(self, conversation_history: List[Dict]) -> str:
         """
         Bedrock에 전달할 대화 컨텍스트 포맷팅

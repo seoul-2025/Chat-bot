@@ -200,17 +200,7 @@ const Header = ({
                 </div>
               </div>
             )} */}
-            {onDashboard && (
-              <div className="hidden md:block">
-                <button
-                  className="flex items-center space-x-2 px-5 py-3 rounded-lg text-sm font-semibold transition-all duration-200 text-text-300 hover:bg-bg-300 hover:text-text-100"
-                  onClick={() => handleUserMenuClick("dashboard")}
-                >
-                  <BarChart3 size={20} />
-                  <span>대시보드</span>
-                </button>
-              </div>
-            )}
+            {/* 대시보드 버튼 숨김 처리 */}
 
             {isLoggedIn && userInfo ? (
               <div className="relative" ref={userDropdownRef}>
@@ -276,15 +266,7 @@ const Header = ({
                       </div>
                     </div>
                     <div className="py-1">
-                      {onDashboard && (
-                        <button
-                          className="flex items-center px-4 py-2 text-sm text-text-200 hover:bg-bg-200 w-full text-left transition-colors duration-150 md:hidden"
-                          onClick={() => handleUserMenuClick("dashboard")}
-                        >
-                          <BarChart3 className="h-4 w-4 mr-3" />
-                          대시보드
-                        </button>
-                      )}
+                      {/* 대시보드 메뉴 숨김 처리 */}
                       <button
                         className="flex items-center px-4 py-2 text-sm text-text-200 hover:bg-bg-200 w-full text-left transition-colors duration-150"
                         onClick={() => handleUserMenuClick("profile")}

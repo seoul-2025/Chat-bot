@@ -12,7 +12,8 @@ DYNAMODB_TABLES = {
     'conversations': 'nx-wt-prf-conversations',
     'prompts': 'nx-wt-prf-prompts',
     'files': 'nx-wt-prf-files',
-    'usage': 'nx-wt-prf-usage'
+    'usage': 'nx-wt-prf-usage',
+    'daily_usage': 'nx-wt-prf-dev-v2-usage-tracking'  # 일별 사용량 추적 테이블
 }
 
 # Bedrock 설정 - Claude Opus 4.1 모델 설정

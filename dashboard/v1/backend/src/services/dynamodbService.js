@@ -61,9 +61,22 @@ const getCognitoUserInfo = async (userId) => {
 /**
  * serviceId에서 언어 버전 확인 (_en 접미사)
  * 테이블 이름과 키 구조를 반환
+ * @param {Object} service - 서비스 설정
+ * @param {string} serviceIdWithLang - 언어 접미사 포함 서비스 ID
+ * @param {Object} options - 추가 옵션 { useDailyTable: boolean }
  */
-const getTableConfigForService = (service, serviceIdWithLang) => {
+const getTableConfigForService = (service, serviceIdWithLang, options = {}) => {
   const isEnglish = serviceIdWithLang && serviceIdWithLang.endsWith('_en');
+  const { useDailyTable } = options;
+
+  // 일별 테이블 사용 옵션이 있고 dailyUsageTable이 정의된 경우
+  if (useDailyTable && service.dailyUsageTable) {
+    return {
+      tableName: service.dailyUsageTable,
+      keyStructure: service.dailyKeyStructure || service.keyStructure,
+      isDaily: true
+    };
+  }
 
   // 영어 버전이고 영어 테이블이 있으면 영어 테이블과 키 구조 사용
   if (isEnglish && service.usageTableEn) {
@@ -429,8 +442,9 @@ export const getDailyTrend = async (serviceId, yearMonth) => {
  * 날짜 추출
  */
 const extractDate = (item, serviceConfig) => {
-  // createdAt, timestamp, date 등의 필드에서 날짜 추출
-  const dateField = item.createdAt || item.timestamp || item.date || item.usageDate;
+  // date, usageDate를 먼저 확인 (일별 추적 테이블용)
+  // createdAt/updatedAt은 마지막에 확인 (레코드 생성/수정 시간일 수 있음)
+  const dateField = item.date || item.usageDate || item.createdAt || item.timestamp || item.updatedAt;
 
   if (!dateField) {
     // SK에서 추출 시도
@@ -465,34 +479,40 @@ const extractDate = (item, serviceConfig) => {
 };
 
 /**
- * 이메일로 사용자 검색
+ * 이메일로 사용자 검색 (Cognito 사용)
  */
 export const searchUserByEmail = async (email, serviceId = 'title') => {
-  const userTable = USER_TABLES[serviceId];
-
-  if (!userTable) {
-    throw new Error(`User table not found for service: ${serviceId}`);
-  }
-
   try {
-    // 이메일로 사용자 검색 (Scan 사용)
-    const command = new ScanCommand({
-      TableName: userTable,
-      FilterExpression: 'email = :email',
-      ExpressionAttributeValues: {
-        ':email': email
-      }
+    const { ListUsersCommand } = await import('@aws-sdk/client-cognito-identity-provider');
+
+    // Cognito에서 이메일로 사용자 검색
+    const command = new ListUsersCommand({
+      UserPoolId: USER_POOL_ID,
+      Filter: `email = "${email}"`,
+      Limit: 1
     });
 
-    const response = await docClient.send(command);
+    const response = await cognitoClient.send(command);
 
-    if (!response.Items || response.Items.length === 0) {
+    if (!response.Users || response.Users.length === 0) {
+      console.log(`User not found in Cognito: ${email}`);
       return null;
     }
 
-    return response.Items[0];
+    const user = response.Users[0];
+    const emailAttr = user.UserAttributes?.find(attr => attr.Name === 'email');
+    const nameAttr = user.UserAttributes?.find(attr => attr.Name === 'name');
+
+    return {
+      user_id: user.Username,
+      email: emailAttr?.Value || email,
+      username: nameAttr?.Value || user.Username,
+      role: 'user',
+      status: user.Enabled ? 'active' : 'inactive',
+      createdAt: user.UserCreateDate
+    };
   } catch (error) {
-    console.error(`Error searching user by email:`, error);
+    console.error(`Error searching user by email in Cognito:`, error);
     throw error;
   }
 };
@@ -501,38 +521,61 @@ export const searchUserByEmail = async (email, serviceId = 'title') => {
  * 사용자 ID로 사용량 조회
  */
 export const getUserUsage = async (userId, serviceId, yearMonth) => {
-  const service = SERVICES_CONFIG.find(s => s.id === serviceId);
+  const actualServiceId = serviceId.replace(/_kr$|_en$/, '');
+  const service = SERVICES_CONFIG.find(s => s.id === actualServiceId);
 
   if (!service) {
-    throw new Error(`Service not found: ${serviceId}`);
+    throw new Error(`Service not found: ${actualServiceId}`);
   }
 
-  try {
-    console.log(`Querying usage for user ${userId} in ${service.usageTable} for ${yearMonth}`);
+  const { tableName, keyStructure } = getTableConfigForService(service, serviceId);
 
-    // userId로 사용량 조회
+  try {
+    console.log(`Querying usage for user ${userId} in ${tableName} for ${yearMonth}`);
+    console.log(`Key structure: PK=${keyStructure.PK}, SK=${keyStructure.SK}`);
+
+    // 전체 테이블 스캔 후 필터링 (다양한 키 구조 지원)
     const command = new ScanCommand({
-      TableName: service.usageTable,
-      FilterExpression: 'userId = :userId AND contains(#sk, :yearMonth)',
-      ExpressionAttributeNames: {
-        '#sk': service.keyStructure.SK
-      },
-      ExpressionAttributeValues: {
-        ':userId': userId,
-        ':yearMonth': yearMonth
-      }
+      TableName: tableName
     });
 
     const response = await docClient.send(command);
 
-    console.log(`Found ${response.Count} usage records for user ${userId}`);
+    // 아이템을 필터링
+    const filteredItems = (response.Items || []).filter(item => {
+      // userId 추출 (다양한 형식 지원)
+      const itemUserId = extractUserId(item, { keyStructure });
+
+      // userId 일치 확인
+      if (itemUserId !== userId) return false;
+
+      // yearMonth 필터링
+      if (yearMonth && yearMonth !== 'all') {
+        const skField = keyStructure.SK;
+        const skValue = item[skField] || item.SK || '';
+
+        // SK에 yearMonth 포함 확인 또는 날짜 필드 확인
+        const dateStr = extractDate(item, { keyStructure });
+        if (dateStr && dateStr.startsWith(yearMonth)) {
+          return true;
+        }
+        if (typeof skValue === 'string' && skValue.includes(yearMonth)) {
+          return true;
+        }
+        return false;
+      }
+
+      return true;
+    });
+
+    console.log(`Found ${filteredItems.length} usage records for user ${userId}`);
 
     return {
       userId,
-      serviceId: service.id,
+      serviceId: actualServiceId,
       serviceName: service.displayName,
-      items: response.Items || [],
-      count: response.Count || 0
+      items: filteredItems,
+      count: filteredItems.length
     };
   } catch (error) {
     console.error(`Error querying user usage:`, error);
@@ -650,20 +693,26 @@ export const getAllUsersWithUsage = async (serviceId = 'title', yearMonth) => {
       const promises = services.map(async (service) => {
         let usageCommand;
 
+        // 날짜 범위 필터가 있고 dailyUsageTable이 있으면 일별 테이블 사용
+        const useDailyTable = yearMonth && yearMonth.includes('~') && service.dailyUsageTable;
+        const tableName = useDailyTable ? service.dailyUsageTable : service.usageTable;
+        const keyStructure = useDailyTable ? (service.dailyKeyStructure || service.keyStructure) : service.keyStructure;
+
         if (!yearMonth || yearMonth === 'all') {
           usageCommand = new ScanCommand({
-            TableName: service.usageTable
+            TableName: tableName
           });
         } else if (yearMonth.includes('~')) {
+          // 날짜 범위 필터는 후처리로 적용하므로 전체 스캔
           usageCommand = new ScanCommand({
-            TableName: service.usageTable
+            TableName: tableName
           });
         } else {
           usageCommand = new ScanCommand({
-            TableName: service.usageTable,
+            TableName: tableName,
             FilterExpression: 'contains(#sk, :yearMonth)',
             ExpressionAttributeNames: {
-              '#sk': service.keyStructure.SK
+              '#sk': keyStructure.SK
             },
             ExpressionAttributeValues: {
               ':yearMonth': yearMonth
@@ -673,7 +722,7 @@ export const getAllUsersWithUsage = async (serviceId = 'title', yearMonth) => {
 
         const response = await docClient.send(usageCommand);
         return {
-          service,
+          service: { ...service, keyStructure }, // 사용된 키 구조 포함
           items: response.Items || []
         };
       });
@@ -698,9 +747,11 @@ export const getAllUsersWithUsage = async (serviceId = 'title', yearMonth) => {
         throw new Error(`Service not found: ${actualServiceId}`);
       }
 
-      const { tableName, keyStructure } = getTableConfigForService(service, serviceId);
+      // 날짜 범위 필터가 있고 dailyUsageTable이 있으면 일별 테이블 사용
+      const useDailyTable = yearMonth && yearMonth.includes('~') && service.dailyUsageTable;
+      const { tableName, keyStructure } = getTableConfigForService(service, serviceId, { useDailyTable });
 
-      console.log(`Fetching all users from ${tableName} for ${yearMonth || 'all time'} (original serviceId: ${serviceId})`);
+      console.log(`Fetching all users from ${tableName} for ${yearMonth || 'all time'} (original serviceId: ${serviceId}, daily: ${useDailyTable})`);
 
       let usageCommand;
       if (!yearMonth || yearMonth === 'all') {
@@ -869,8 +920,8 @@ export const getAllUsersWithUsage = async (serviceId = 'title', yearMonth) => {
       };
     });
 
-    // 사용량이 많은 순으로 정렬
-    usersWithUsage.sort((a, b) => b.usage.totalTokens - a.usage.totalTokens);
+    // 메시지 수 기준 내림차순 정렬
+    usersWithUsage.sort((a, b) => b.usage.messageCount - a.usage.messageCount);
 
     return usersWithUsage;
   } catch (error) {

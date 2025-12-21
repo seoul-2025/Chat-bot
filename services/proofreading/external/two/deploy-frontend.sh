@@ -12,10 +12,10 @@ echo -e "${BLUE}프론트엔드 CloudFront 배포 스크립트${NC}"
 echo -e "${BLUE}=================================${NC}"
 
 # 설정
-BUCKET_NAME="nx-wt-prf-frontend-prod"  # 새로운 버킷 이름
+BUCKET_NAME="nx-prf-prod-frontend-2025"  # 실제 CloudFront Origin 버킷
 REGION="us-east-1"
 FRONTEND_DIR="./frontend"
-CLOUDFRONT_DISTRIBUTION_ID=""  # 생성 후 자동으로 설정됨
+CLOUDFRONT_DISTRIBUTION_ID="E39OHKSWZD4F8J"  # p1.sedaily.ai CloudFront
 
 # 1. S3 버킷 생성
 echo -e "\n${BLUE}1. S3 버킷 생성 중...${NC}"
@@ -42,24 +42,17 @@ aws s3 website s3://$BUCKET_NAME \
     --index-document index.html \
     --error-document index.html
 
-# S3 버킷 정책 설정 (CloudFront OAI 사용)
+# S3 버킷 정책 설정 (Public Read for S3 Website Endpoint)
 cat > /tmp/bucket-policy.json << EOF
 {
     "Version": "2012-10-17",
     "Statement": [
         {
-            "Sid": "AllowCloudFrontOAI",
+            "Sid": "PublicReadGetObject",
             "Effect": "Allow",
-            "Principal": {
-                "AWS": "*"
-            },
+            "Principal": "*",
             "Action": "s3:GetObject",
-            "Resource": "arn:aws:s3:::$BUCKET_NAME/*",
-            "Condition": {
-                "StringLike": {
-                    "AWS:SourceArn": "arn:aws:cloudfront::*:distribution/*"
-                }
-            }
+            "Resource": "arn:aws:s3:::$BUCKET_NAME/*"
         }
     ]
 }
@@ -74,6 +67,8 @@ echo -e "${GREEN}✅ S3 설정 완료${NC}"
 # 3. 프론트엔드 빌드
 echo -e "\n${BLUE}3. 프론트엔드 빌드 중...${NC}"
 cd $FRONTEND_DIR
+echo -e "${YELLOW}의존성 설치 중...${NC}"
+npm install
 npm run build
 
 if [ $? -eq 0 ]; then
@@ -105,118 +100,27 @@ aws s3 sync dist/ s3://$BUCKET_NAME \
 
 echo -e "${GREEN}✅ S3 업로드 완료${NC}"
 
-# 5. CloudFront 배포 생성
-echo -e "\n${BLUE}5. CloudFront 배포 확인/생성...${NC}"
+# 5. CloudFront 캐시 무효화
+echo -e "\n${BLUE}5. CloudFront 캐시 무효화 중...${NC}"
+echo -e "${YELLOW}Distribution ID: $CLOUDFRONT_DISTRIBUTION_ID${NC}"
 
-# 기존 배포 확인
-DISTRIBUTION_ID=$(aws cloudfront list-distributions \
-    --query "DistributionList.Items[?Origins.Items[0].DomainName=='$BUCKET_NAME.s3.amazonaws.com'].Id" \
-    --output text)
+aws cloudfront create-invalidation \
+    --distribution-id $CLOUDFRONT_DISTRIBUTION_ID \
+    --paths "/*" > /dev/null
 
-if [ -z "$DISTRIBUTION_ID" ]; then
-    echo -e "${YELLOW}CloudFront 배포 생성 중...${NC}"
-
-    # CloudFront 설정 파일 생성
-    cat > /tmp/cf-config.json << EOF
-{
-    "CallerReference": "nx-wt-prf-$(date +%s)",
-    "Comment": "NX WT PRF Frontend Distribution",
-    "Enabled": true,
-    "Origins": {
-        "Quantity": 1,
-        "Items": [
-            {
-                "Id": "S3-$BUCKET_NAME",
-                "DomainName": "$BUCKET_NAME.s3.amazonaws.com",
-                "S3OriginConfig": {
-                    "OriginAccessIdentity": ""
-                }
-            }
-        ]
-    },
-    "DefaultRootObject": "index.html",
-    "DefaultCacheBehavior": {
-        "TargetOriginId": "S3-$BUCKET_NAME",
-        "ViewerProtocolPolicy": "redirect-to-https",
-        "AllowedMethods": {
-            "Quantity": 2,
-            "Items": ["HEAD", "GET"]
-        },
-        "ForwardedValues": {
-            "QueryString": false,
-            "Cookies": {
-                "Forward": "none"
-            }
-        },
-        "TrustedSigners": {
-            "Enabled": false,
-            "Quantity": 0
-        },
-        "MinTTL": 0,
-        "DefaultTTL": 86400,
-        "MaxTTL": 31536000,
-        "Compress": true
-    },
-    "CustomErrorResponses": {
-        "Quantity": 1,
-        "Items": [
-            {
-                "ErrorCode": 404,
-                "ResponseCode": "200",
-                "ResponsePagePath": "/index.html",
-                "ErrorCachingMinTTL": 300
-            }
-        ]
-    },
-    "PriceClass": "PriceClass_100"
-}
-EOF
-
-    # CloudFront 배포 생성
-    DISTRIBUTION_OUTPUT=$(aws cloudfront create-distribution \
-        --distribution-config file:///tmp/cf-config.json)
-
-    DISTRIBUTION_ID=$(echo $DISTRIBUTION_OUTPUT | jq -r '.Distribution.Id')
-    DOMAIN_NAME=$(echo $DISTRIBUTION_OUTPUT | jq -r '.Distribution.DomainName')
-
-    echo -e "${GREEN}✅ CloudFront 배포 생성 완료${NC}"
-    echo -e "${BLUE}Distribution ID: $DISTRIBUTION_ID${NC}"
-    echo -e "${BLUE}Domain Name: $DOMAIN_NAME${NC}"
-else
-    echo -e "${YELLOW}ℹ️  기존 CloudFront 배포 사용: $DISTRIBUTION_ID${NC}"
-
-    # 캐시 무효화
-    echo -e "${BLUE}캐시 무효화 중...${NC}"
-    aws cloudfront create-invalidation \
-        --distribution-id $DISTRIBUTION_ID \
-        --paths "/*" > /dev/null
-
-    echo -e "${GREEN}✅ 캐시 무효화 요청 완료${NC}"
-fi
+echo -e "${GREEN}✅ 캐시 무효화 요청 완료${NC}"
 
 # 6. CloudFront 도메인 정보 출력
 echo -e "\n${BLUE}=================================${NC}"
 echo -e "${GREEN}✅ 배포 완료!${NC}"
 echo -e "${BLUE}=================================${NC}"
 
-if [ ! -z "$DISTRIBUTION_ID" ]; then
-    DOMAIN_NAME=$(aws cloudfront get-distribution \
-        --id $DISTRIBUTION_ID \
-        --query 'Distribution.DomainName' \
-        --output text)
-
-    echo -e "\n${YELLOW}접속 정보:${NC}"
-    echo -e "CloudFront URL: ${GREEN}https://$DOMAIN_NAME${NC}"
-    echo -e "S3 버킷: ${GREEN}$BUCKET_NAME${NC}"
-    echo -e "Distribution ID: ${GREEN}$DISTRIBUTION_ID${NC}"
-
-    echo -e "\n${YELLOW}다음 단계:${NC}"
-    echo -e "1. CloudFront 배포가 완전히 활성화될 때까지 15-20분 대기"
-    echo -e "2. https://$DOMAIN_NAME 접속 테스트"
-    echo -e "3. 커스텀 도메인 연결 (Route 53)"
-fi
+echo -e "\n${YELLOW}접속 정보:${NC}"
+echo -e "도메인: ${GREEN}https://p1.sedaily.ai${NC}"
+echo -e "S3 버킷: ${GREEN}$BUCKET_NAME${NC}"
+echo -e "Distribution ID: ${GREEN}$CLOUDFRONT_DISTRIBUTION_ID${NC}"
 
 # 정리
-rm -f /tmp/bucket-policy.json /tmp/cf-config.json
+rm -f /tmp/bucket-policy.json
 
 cd ..

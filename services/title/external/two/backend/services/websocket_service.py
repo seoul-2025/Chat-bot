@@ -14,20 +14,12 @@ import uuid
 
 from handlers.websocket.conversation_manager import ConversationManager
 from lib.bedrock_client_enhanced import BedrockClientEnhanced
-from lib.anthropic_client import AnthropicClient
+from lib.anthropic_client import AnthropicClient, create_enhanced_system_prompt
 from lib.citation_formatter import CitationFormatter
 from utils.logger import setup_logger
 
-# RAG 기능 (선택적 import)
-try:
-    from lib.vector_search import get_vector_search
-    RAG_AVAILABLE = True
-    logger = setup_logger(__name__)
-    logger.info("✅ RAG 모듈 로드 성공")
-except ImportError as e:
-    RAG_AVAILABLE = False
-    logger = setup_logger(__name__)
-    logger.warning(f"⚠️  RAG 모듈 없음: {str(e)}")
+# Logger 초기화
+logger = setup_logger(__name__)
 
 # DynamoDB 클라이언트
 dynamodb = boto3.resource('dynamodb', region_name='us-east-1')
@@ -215,75 +207,6 @@ class WebSocketService:
             logger.error(f"Error fetching from DB: {str(e)}")
             return {'instruction': '', 'description': '', 'files': []}
 
-    def _create_rag_enhanced_prompt(
-        self,
-        user_message: str,
-        engine_type: str
-    ) -> Dict[str, Any]:
-        """
-        RAG로 관련 프롬프트 청크를 검색하여 동적으로 프롬프트 구성
-
-        Args:
-            user_message: 사용자 입력 (기사 내용)
-            engine_type: 엔진 타입
-
-        Returns:
-            RAG로 구성된 프롬프트 데이터
-        """
-        if not RAG_AVAILABLE:
-            logger.warning("⚠️  RAG 모듈 없음 - 기존 방식 사용")
-            return self._load_prompt_from_dynamodb(engine_type)
-
-        try:
-            logger.info("🔍 RAG 모드: 벡터 검색 시작")
-
-            # 1. 벡터 검색 수행
-            vector_search = get_vector_search()
-            relevant_chunks = vector_search.search_similar_chunks(
-                query=user_message,
-                top_k=int(os.environ.get('RAG_TOP_K', '10')),
-                min_similarity=float(os.environ.get('RAG_MIN_SIMILARITY', '0.7'))
-            )
-
-            if not relevant_chunks:
-                logger.warning("⚠️  RAG 검색 결과 없음 - 기본 프롬프트 사용")
-                return self._load_prompt_from_dynamodb(engine_type)
-
-            # 2. 검색 결과로 컨텍스트 구성
-            max_rag_tokens = int(os.environ.get('RAG_MAX_TOKENS', '15000'))
-            rag_context = vector_search.build_context_from_results(
-                relevant_chunks,
-                max_tokens=max_rag_tokens
-            )
-
-            # 3. 기본 instruction과 description은 유지 (코어 지침)
-            base_prompt = self._load_prompt_from_dynamodb(engine_type)
-
-            # 4. RAG 강화 프롬프트 구성
-            rag_prompt_data = {
-                'instruction': base_prompt.get('instruction', ''),
-                'description': base_prompt.get('description', ''),
-                'files': [
-                    {
-                        'fileName': 'rag_retrieved_context.txt',
-                        'fileContent': rag_context,
-                        'fileType': 'text'
-                    }
-                ]
-            }
-
-            logger.info(f"✅ RAG 프롬프트 구성 완료: {len(relevant_chunks)}개 청크")
-            logger.info(f"   - Instruction: {len(rag_prompt_data['instruction'])} chars")
-            logger.info(f"   - Description: {len(rag_prompt_data['description'])} chars")
-            logger.info(f"   - RAG Context: ~{max_rag_tokens} tokens")
-
-            return rag_prompt_data
-
-        except Exception as e:
-            logger.error(f"❌ RAG 프롬프트 생성 실패: {str(e)}")
-            logger.info("🔄 Fallback: 기본 프롬프트 사용")
-            return self._load_prompt_from_dynamodb(engine_type)
-    
     def stream_response(
         self,
         user_message: str,
@@ -303,20 +226,8 @@ class WebSocketService:
             # 대화 컨텍스트를 포함한 프롬프트 생성
             formatted_history = self._format_conversation_for_bedrock(conversation_history)
 
-            # RAG 사용 여부 결정 (환경변수로 제어)
-            use_rag = os.environ.get('USE_RAG', 'false').lower() == 'true'
-
-            if use_rag and RAG_AVAILABLE:
-                # RAG 방식: 동적 프롬프트 구성
-                logger.info("📚 RAG 모드 활성화")
-                prompt_data = self._create_rag_enhanced_prompt(
-                    user_message=user_message,
-                    engine_type=engine_type
-                )
-            else:
-                # 기존 방식: 전체 프롬프트 캐싱
-                logger.info("💾 캐시 모드 활성화")
-                prompt_data = self._load_prompt_from_dynamodb(engine_type)
+            # DynamoDB에서 프롬프트 로드 (영구 캐싱 적용)
+            prompt_data = self._load_prompt_from_dynamodb(engine_type)
 
             logger.info(f"Loaded prompt for {engine_type}: instruction={len(prompt_data.get('instruction', ''))} chars")
             logger.info(f"Streaming response for engine {engine_type}")
@@ -332,19 +243,19 @@ class WebSocketService:
             if self.ai_provider == 'anthropic' and hasattr(self.ai_client, 'stream_response'):
                 try:
                     logger.info(f"Using Anthropic API for {engine_type} (web_search: {enable_web_search})")
-                    
-                    # 프롬프트와 대화 컨텍스트 결합
-                    full_system_prompt = self._build_system_prompt(
-                        guidelines=prompt_data.get('instruction', ''),
-                        description=prompt_data.get('description', ''),
-                        files=prompt_data.get('files', []),
-                        conversation_context=formatted_history
+
+                    # 체계적인 시스템 프롬프트 생성 (CoT 기반)
+                    # 캐싱 최적화: system_prompt는 정적으로 유지, 대화 히스토리는 별도로 전달
+                    full_system_prompt = create_enhanced_system_prompt(
+                        prompt_data=prompt_data,
+                        engine_type=engine_type,
+                        user_role=user_role
                     )
-                    
+
                     for chunk in self.ai_client.stream_response(
                         user_message=user_message,
                         system_prompt=full_system_prompt,
-                        conversation_context=formatted_history,
+                        conversation_history=conversation_history,  # 대화 히스토리를 별도로 전달
                         enable_web_search=enable_web_search,
                         enable_caching=True  # 프롬프트 캐싱 활성화
                     ):
@@ -520,42 +431,7 @@ class WebSocketService:
             merged = merged[-30:]
         
         return merged
-    
-    def _build_system_prompt(
-        self,
-        guidelines: str,
-        description: str,
-        files: List[Dict],
-        conversation_context: str
-    ) -> str:
-        """
-        Anthropic API용 시스템 프롬프트 구성
-        """
-        prompt_parts = []
-        
-        # 기본 가이드라인
-        if guidelines:
-            prompt_parts.append(guidelines)
-        
-        # 설명 추가
-        if description:
-            prompt_parts.append(f"\n\n=== 추가 설명 ===\n{description}")
-        
-        # 파일 내용 추가
-        if files:
-            prompt_parts.append("\n\n=== 참고 문서 ===")
-            for file in files:
-                file_name = file.get('fileName', 'Unknown')
-                file_content = file.get('fileContent', '')
-                if file_content:
-                    prompt_parts.append(f"\n[{file_name}]\n{file_content}")
-        
-        # 대화 컨텍스트 추가
-        if conversation_context:
-            prompt_parts.append(f"\n\n{conversation_context}")
-        
-        return "\n".join(prompt_parts)
-    
+
     def _format_conversation_for_bedrock(self, conversation_history: List[Dict]) -> str:
         """
         Bedrock에 전달할 대화 컨텍스트 포맷팅

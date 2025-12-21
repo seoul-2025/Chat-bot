@@ -12,7 +12,7 @@ const UsersTable = ({ selectedMonth, selectedService = 'title' }) => {
   const [loading, setLoading] = useState(true);
   const [usersData, setUsersData] = useState([]);
   const [error, setError] = useState(null);
-  const [sortBy, setSortBy] = useState('totalTokens'); // totalTokens, email, messageCount, createdAt
+  const [sortBy, setSortBy] = useState('messageCount'); // messageCount, totalTokens, email, createdAt
   const [sortOrder, setSortOrder] = useState('desc'); // asc, desc
   const [emailFilter, setEmailFilter] = useState(''); // 이메일 필터
 

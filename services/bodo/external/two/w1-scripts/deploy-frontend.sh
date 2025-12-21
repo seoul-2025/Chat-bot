@@ -24,7 +24,7 @@ build_frontend() {
     
     # Build the project
     log_info "Running build..."
-    npm run build
+    ./node_modules/.bin/vite build
     
     if [ -d "dist" ]; then
         log_info "Build successful!"
@@ -105,11 +105,14 @@ main() {
     echo "  WS URL: $(grep VITE_WS_URL "$FRONTEND_DIR/.env" | cut -d= -f2)"
     echo ""
     
-    read -p "Continue with deployment? (y/n): " -n 1 -r
-    echo ""
-    if [[ ! $REPLY =~ ^[Yy]$ ]]; then
-        log_info "Deployment cancelled"
-        exit 0
+    # Auto-confirm if -y flag is passed
+    if [[ "$1" != "-y" ]]; then
+        read -p "Continue with deployment? (y/n): " -n 1 -r
+        echo ""
+        if [[ ! $REPLY =~ ^[Yy]$ ]]; then
+            log_info "Deployment cancelled"
+            exit 0
+        fi
     fi
     
     # Execute deployment steps

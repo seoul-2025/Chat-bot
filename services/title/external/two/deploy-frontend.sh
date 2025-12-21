@@ -7,7 +7,7 @@
 set -e
 
 PROJECT_ROOT="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
-CONFIG_FILE="$PROJECT_ROOT/config/t1-production.env"
+CONFIG_FILE="$PROJECT_ROOT/.env.deploy"
 
 # Load configuration
 source "$CONFIG_FILE"
@@ -27,20 +27,20 @@ fi
 echo "🔨 빌드 중..."
 npm run build
 
-# Deploy to S3
+# Deploy to S3 (Vite outputs to dist/)
 echo "☁️ S3 업로드..."
-aws s3 sync build/ "s3://${S3_BUCKET}" \
+aws s3 sync dist/ "s3://${S3_BUCKET}" \
     --delete \
     --cache-control "public, max-age=31536000" \
     --exclude "index.html" \
     --exclude "*.json"
 
 # Upload index.html with no-cache
-aws s3 cp build/index.html "s3://${S3_BUCKET}/index.html" \
+aws s3 cp dist/index.html "s3://${S3_BUCKET}/index.html" \
     --cache-control "no-cache, no-store, must-revalidate"
 
 # Upload manifest with appropriate cache
-[ -f build/manifest.json ] && aws s3 cp build/manifest.json "s3://${S3_BUCKET}/manifest.json" \
+[ -f dist/manifest.json ] && aws s3 cp dist/manifest.json "s3://${S3_BUCKET}/manifest.json" \
     --cache-control "public, max-age=3600"
 
 # Invalidate CloudFront

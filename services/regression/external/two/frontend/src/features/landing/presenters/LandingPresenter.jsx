@@ -100,7 +100,7 @@ const LandingPresenter = ({
                       ? "opacity-100 translate-y-0"
                       : "opacity-0 translate-y-10"
                   }`}
-                  onClick={() => onEngineSelect("C1")}
+                  onClick={() => onEngineSelect("11")}
                 >
                   <div className="absolute inset-0 bg-gradient-to-r from-orange-600 to-red-600 rounded-2xl blur-xl opacity-20 group-hover:opacity-40 transition-opacity" />
                   <div className="relative bg-gray-900/90 backdrop-blur-xl rounded-2xl p-8 border border-gray-700 hover:border-orange-500/50 transition-all cursor-pointer hover:transform hover:scale-105 min-h-[550px] flex flex-col">
@@ -188,7 +188,7 @@ const LandingPresenter = ({
                       ? "opacity-100 translate-y-0"
                       : "opacity-0 translate-y-10"
                   }`}
-                  onClick={() => onEngineSelect("C2")}
+                  onClick={() => onEngineSelect("22")}
                 >
                   <div className="absolute inset-0 bg-gradient-to-r from-blue-600 to-purple-600 rounded-2xl blur-xl opacity-20 group-hover:opacity-40 transition-opacity" />
                   <div className="relative bg-gray-900/90 backdrop-blur-xl rounded-2xl p-8 border border-gray-700 hover:border-blue-500/50 transition-all cursor-pointer hover:transform hover:scale-105 min-h-[550px] flex flex-col">

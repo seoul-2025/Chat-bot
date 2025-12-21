@@ -200,6 +200,7 @@ const Header = ({
                 </div>
               </div>
             )} */}
+            {/* 대시보드 버튼 비활성화
             {onDashboard && (
               <div className="hidden md:block">
                 <button
@@ -211,6 +212,7 @@ const Header = ({
                 </button>
               </div>
             )}
+            */}
 
             {isLoggedIn && userInfo ? (
               <div className="relative" ref={userDropdownRef}>
@@ -276,6 +278,7 @@ const Header = ({
                       </div>
                     </div>
                     <div className="py-1">
+                      {/* 대시보드 버튼 비활성화
                       {onDashboard && (
                         <button
                           className="flex items-center px-4 py-2 text-sm text-text-200 hover:bg-bg-200 w-full text-left transition-colors duration-150 md:hidden"
@@ -285,6 +288,7 @@ const Header = ({
                           대시보드
                         </button>
                       )}
+                      */}
                       <button
                         className="flex items-center px-4 py-2 text-sm text-text-200 hover:bg-bg-200 w-full text-left transition-colors duration-150"
                         onClick={() => handleUserMenuClick("profile")}

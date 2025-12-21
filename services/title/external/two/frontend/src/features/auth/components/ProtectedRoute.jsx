@@ -22,12 +22,17 @@ const ProtectedRoute = ({ children, requiredRole = null }) => {
     console.log('🔐 초기 isLoggedIn:', isLoggedIn);
     return isLoggedIn;
   });
-  // SSO 토큰이 있으면 로딩으로 시작
+  // SSO 토큰이 URL에 있으면 로딩으로 시작 (쿠키가 아닌 URL만 체크)
   const [isLoading, setIsLoading] = useState(() => {
-    const hasTokens = hasSSOTokens();
-    console.log('🔐 초기 hasSSOTokens:', hasTokens);
-    console.log('🔐 초기 로딩 상태:', hasTokens);
-    return hasTokens;
+    const isLoggedIn = localStorage.getItem('isLoggedIn') === 'true';
+    if (isLoggedIn) {
+      console.log('🔐 이미 로그인됨 - 로딩 불필요');
+      return false;
+    }
+    const urlParams = new URLSearchParams(window.location.search);
+    const hasURLTokens = !!(urlParams.get('idToken') && urlParams.get('accessToken'));
+    console.log('🔐 초기 URL 토큰:', hasURLTokens);
+    return hasURLTokens;
   });
   const [userRole, setUserRole] = useState(() => {
     const role = localStorage.getItem('userRole');
@@ -41,26 +46,32 @@ const ProtectedRoute = ({ children, requiredRole = null }) => {
     console.log('  - localStorage.isLoggedIn:', localStorage.getItem('isLoggedIn'));
     console.log('  - localStorage.ssoLogin:', localStorage.getItem('ssoLogin'));
 
-    // SSO 토큰이 URL에 있으면 SSO 로그인 시도
-    const hasTokens = hasSSOTokens();
-    console.log('  - hasSSOTokens() 결과:', hasTokens);
+    // 이미 로그인되어 있으면 SSO 처리 건너뛰기 (무한 루프 방지)
+    const isLoggedIn = localStorage.getItem('isLoggedIn') === 'true';
+    if (isLoggedIn) {
+      console.log('✅ 이미 로그인됨 - SSO 처리 건너뜀');
+      setIsAuthenticated(true);
+      setUserRole(localStorage.getItem('userRole') || 'user');
+      setIsLoading(false);
+      // 백그라운드에서 세션 유효성 확인
+      checkAuthInBackground();
+      return;
+    }
 
-    if (hasTokens) {
-      console.log('🔑 SSO 토큰 감지 - 자동 로그인 시도');
+    // URL에 토큰 파라미터가 있는지 확인 (쿠키가 아닌 URL만 체크)
+    const urlParams = new URLSearchParams(window.location.search);
+    const hasURLTokens = urlParams.get('idToken') && urlParams.get('accessToken');
+    console.log('  - URL에 토큰 파라미터:', hasURLTokens);
+
+    if (hasURLTokens) {
+      console.log('🔑 URL에서 SSO 토큰 감지 - 자동 로그인 시도');
       handleSSOLogin();
       return;
     }
 
-    // 이미 로그인 상태가 확인되면 바로 children 렌더링
-    if (isAuthenticated) {
-      console.log('🔐 이미 로그인됨 - 백그라운드 세션 확인');
-      setIsLoading(false); // 이미 로그인됨 - 로딩 종료
-      // 백그라운드에서 세션 유효성 확인
-      checkAuthInBackground();
-    } else {
-      console.log('🔐 로그인 안됨 - 로그인 페이지로 리디렉션');
-      setIsLoading(false);
-    }
+    // 로그인 안된 상태
+    console.log('🔐 로그인 안됨 - 로그인 페이지로 리디렉션');
+    setIsLoading(false);
   }, []);
 
   // SSO 로그인 처리
@@ -81,16 +92,20 @@ const ProtectedRoute = ({ children, requiredRole = null }) => {
         console.log('  - userPlan:', result.userPlan);
         console.log('  - userInfo:', result.userInfo);
 
-        console.log('🔄 페이지 새로고침으로 헤더 업데이트');
-
-        // URL에서 토큰 제거한 경로로 페이지 새로고침
-        const currentPath = window.location.pathname;
-        window.location.replace(currentPath);
-
-        // 새로고침 후에는 아래 코드가 실행되지 않지만,
-        // 혹시 모르니 상태도 업데이트
+        // React 상태 업데이트 (페이지 새로고침 없이)
         setIsAuthenticated(true);
         setUserRole(result.userRole);
+
+        // URL에서 토큰 파라미터만 제거 (새로고침 없이)
+        const currentPath = window.location.pathname;
+        if (window.location.search) {
+          window.history.replaceState({}, '', currentPath);
+          console.log('🧹 URL에서 토큰 파라미터 제거 완료');
+        }
+
+        // 헤더 업데이트를 위한 이벤트 발생
+        window.dispatchEvent(new CustomEvent('userInfoUpdated'));
+        console.log('📢 userInfoUpdated 이벤트 발생');
       } else {
         console.warn('⚠️ ProtectedRoute: SSO 로그인 실패 - 일반 로그인 필요');
         setIsAuthenticated(false);

@@ -21,8 +21,9 @@ const ENGINE_INDEX_MAP = {
     't5': 1,        // t1-1
     'c7': 2,        // t1-2
     'pro': 3,       // t1-3
-    '11/22': 4,     // t1-4
-    '2024-11-22': 4, // 날짜 형식도 같은 번호
+    'h8': 4,        // t1-4 (legacy)
+    '11/22': 5,     // t1-5
+    '2024-11-22': 5, // 날짜 형식도 같은 번호
   },
 
   // 교열 서비스 (Proofreading)
@@ -46,8 +47,9 @@ const ENGINE_INDEX_MAP = {
 
   // 퇴고 서비스 (Revision)
   revision: {
-    'column': 1,    // r1-1
-    'c1': 2,        // r1-2
+    'c1': 1,        // r1-1
+    'c2': 2,        // r1-2
+    'column': 3,    // r1-3 (legacy)
   },
 
   // 버디 서비스 (Buddy)

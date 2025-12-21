@@ -35,10 +35,10 @@ export DYNAMODB_TABLES=(
 )
 
 # S3 Buckets
-export FRONTEND_BUCKET="w1-sedaily-frontend-bucket"
+export FRONTEND_BUCKET="w1-sedaily-frontend"
 
 # CloudFront Distribution
-export CLOUDFRONT_ID="d9am5o27m55dc"
+export CLOUDFRONT_ID="E10S6CKR5TLUBG"
 
 # IAM Configuration
 export LAMBDA_ROLE="w1-lambda-execution-role"

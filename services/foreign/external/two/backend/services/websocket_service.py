@@ -236,27 +236,27 @@ class WebSocketService:
 
             # AI 스트리밍 호출 (Anthropic 또는 Bedrock)
             total_response = ""
-            
+
             # Anthropic API 사용 시
             if self.ai_provider == 'anthropic' and hasattr(self.ai_client, 'stream_response'):
                 try:
                     logger.info(f"🤖 Using Anthropic API for {engine_type}")
-                    
-                    # 프롬프트와 대화 컨텍스트 결합
+
+                    # 프롬프트 구성 (캐싱 최적화: 정적 컨텐츠만 포함)
                     full_system_prompt = self._build_system_prompt(
                         instruction=prompt_data.get('instruction', ''),
                         description=prompt_data.get('description', ''),
-                        files=prompt_data.get('files', []),
-                        conversation_context=formatted_history
+                        files=prompt_data.get('files', [])
                     )
-                    
+
                     # 웹 검색 활성화 조건 확인
                     enable_web_search = self._should_enable_web_search(user_message)
-                    
+
+                    # 캐싱 최적화: 대화 히스토리는 messages 배열로 전달
                     for chunk in self.ai_client.stream_response(
                         user_message=user_message,
                         system_prompt=full_system_prompt,
-                        conversation_context=formatted_history,
+                        conversation_history=conversation_history,
                         enable_web_search=enable_web_search
                     ):
                         total_response += chunk
@@ -428,22 +428,23 @@ class WebSocketService:
         self,
         instruction: str,
         description: str,
-        files: List[Dict],
-        conversation_context: str
+        files: List[Dict]
     ) -> str:
         """
-        Anthropic API용 시스템 프롬프트 구성
+        Anthropic API용 시스템 프롬프트 구성 (캐싱 최적화: 정적 컨텐츠만 포함)
+
+        Note: 대화 히스토리는 여기에 포함하지 않음 (messages 배열로 별도 전달)
         """
         prompt_parts = []
-        
+
         # 기본 가이드라인
         if instruction:
             prompt_parts.append(instruction)
-        
+
         # 설명 추가
         if description:
             prompt_parts.append(f"\n\n=== 추가 설명 ===\n{description}")
-        
+
         # 웹 검색 출처 표시 가이드라인 추가
         web_search_guidelines = """
 
@@ -465,7 +466,7 @@ class WebSocketService:
 - "오늘", "최근", "최신" 등의 키워드가 있을 때 웹 검색 적극 활용
 """
         prompt_parts.append(web_search_guidelines)
-        
+
         # 파일 내용 추가
         if files:
             prompt_parts.append("\n\n=== 참고 문서 ===")
@@ -474,11 +475,9 @@ class WebSocketService:
                 file_content = file.get('fileContent', '')
                 if file_content:
                     prompt_parts.append(f"\n[{file_name}]\n{file_content}")
-        
-        # 대화 컨텍스트 추가
-        if conversation_context:
-            prompt_parts.append(f"\n\n{conversation_context}")
-        
+
+        # 캐싱 최적화: 대화 컨텍스트는 여기에 추가하지 않음 (messages로 전달)
+
         return "\n".join(prompt_parts)
     
     def _should_enable_web_search(self, user_message: str) -> bool:

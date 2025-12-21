@@ -1,14 +1,14 @@
 import React from "react";
 
-const C1C2GuideSection = ({ selectedEngine = "C1" }) => {
+const C1C2GuideSection = ({ selectedEngine = "11" }) => {
   return (
     <div className="w-full max-w-4xl pt-6">
       <div className="mb-4">
         <h2 className="text-xl font-semibold text-text-100 mb-2">
-          {selectedEngine === "C1" ? "속전속결 퇴고" : "구조분석 퇴고"}
+          {selectedEngine === "11" ? "속전속결 퇴고" : "구조분석 퇴고"}
         </h2>
         <p className="text-sm text-text-300">
-          {selectedEngine === "C1"
+          {selectedEngine === "11"
             ? "1,000자 미만의 기사를 빠르게 퇴고합니다. 첫 문장부터 클릭을 유도하는 기사로 변환합니다."
             : "1,000자 이상의 긴 기사를 끝까지 읽히는 구조로 재설계합니다. 극적인 서사와 긴장감 유지에 최적화되어 있습니다."}
         </p>
@@ -65,7 +65,7 @@ const C1C2GuideSection = ({ selectedEngine = "C1" }) => {
           <div>
             <p className="text-sm text-text-200">
               <span className="font-medium">권장 사용:</span>
-              {selectedEngine === "C1"
+              {selectedEngine === "11"
                 ? "1,000자 미만 기사, 빠른 퇴고, 첫 문장 최적화"
                 : "1,000자 이상 기사, 구조 재설계, 끝까지 읽히는 서사"}
             </p>

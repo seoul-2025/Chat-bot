@@ -10,4 +10,4 @@ export { default as DashboardPresenter } from './presenters/DashboardPresenter';
 export { useDashboard } from './hooks/useDashboard'; // 새로운 Hook
 
 // Services
-export { default as usageService } from './services/usageService';
+export { default as usageService } from '../chat/services/usageService';

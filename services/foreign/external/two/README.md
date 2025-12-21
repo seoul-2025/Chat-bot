@@ -1,162 +1,303 @@
-# 🤖 F1.sedaily.ai - AI Chat Service
+# f1.sedaily.ai
+AI Chat Service - Claude Opus 4.5 based real-time chat with native web search
 
-[![AWS](https://img.shields.io/badge/AWS-Lambda-orange)](https://aws.amazon.com/lambda/)
-[![Python](https://img.shields.io/badge/Python-3.9-blue)](https://www.python.org/)
-[![Claude](https://img.shields.io/badge/Claude-4.5%20Opus-purple)](https://www.anthropic.com/)
-[![WebSearch](https://img.shields.io/badge/WebSearch-Enabled-green)](https://docs.anthropic.com/)
+Last Updated: 2025-12-21
 
-한국 경제 전문 AI 채팅 서비스입니다. 실시간 웹 검색과 출처 표시 기능을 제공합니다.
+## Overview
+F1 is an AI-powered chat service for Seoul Economic Daily. Built on Anthropic Claude Opus 4.5 with real-time WebSocket streaming, native web search, and automatic citation formatting.
 
-## 🌐 서비스 정보
+Live: https://f1.sedaily.ai
 
-- **서비스 URL**: https://f1.sedaily.ai
-- **AI 모델**: Claude 4.5 Opus (claude-opus-4-5-20251101)
-- **주요 기능**: 실시간 웹 검색, 자동 출처 표시, 한국어 경제 전문 상담
+## Features
+- Real-time Chat: WebSocket-based streaming responses
+- Web Search: Anthropic's native web search integration (2025 data)
+- Auto Citation: URL detection with footnote formatting and source credibility indicators
+- Multiple AI Providers: Anthropic API primary, Bedrock fallback
+- Korean Economic Focus: Specialized for Korean economic news and analysis
 
-## 🚀 주요 기능
-
-### ✨ AI 채팅
-
-- **Claude 4.5 Opus** 모델 기반 고품질 응답
-- **실시간 대화** WebSocket 지원
-- **대화 히스토리** 관리
-
-### 🔍 웹 검색 기능
-
-- **자동 활성화**: "오늘", "최신", "뉴스" 키워드 감지
-- **Brave Search**: Claude 네이티브 웹 검색 도구
-- **최대 5회 검색**: 한 대화당 제한
-
-### 📚 출처 표시
-
-- **자동 Citation**: URL 감지 및 각주 번호 변환
-- **신뢰도 표시**:
-  - ✅ 공식 언론사 (YTN, 연합뉴스 등)
-  - 🏛️ 정부/공공기관 (.gov.kr, .go.kr)
-  - ℹ️ 일반 웹사이트
-
-## 🏗️ 아키텍처
-
-### AWS 스택 (f1-two)
-
+## Architecture
 ```
-├── Lambda Functions (6개)
-│   ├── f1-websocket-message-two     # 메시지 처리 (메인)
-│   ├── f1-websocket-connect-two     # 연결 관리
-│   ├── f1-websocket-disconnect-two  # 연결 해제
-│   ├── f1-conversation-api-two      # 대화 API
-│   ├── f1-prompt-crud-two          # 프롬프트 관리
-│   └── f1-usage-handler-two        # 사용량 추적
-│
-├── DynamoDB Tables (6개)
-│   ├── f1-conversations-two        # 대화 세션
-│   ├── f1-messages-two            # 메시지 히스토리
-│   ├── f1-prompts-two             # 시스템 프롬프트
-│   ├── f1-files-two               # 파일 메타데이터
-│   ├── f1-usage-two               # 사용량 통계
-│   └── f1-websocket-connections-two # 연결 관리
-│
-└── Frontend (React + Vite)
-    └── S3 + CloudFront 배포
+Frontend (React + Vite)
+  |
+CloudFront (CDN)
+  |
+S3 (Static Hosting)
+
+WebSocket Flow:
+User -> API Gateway WebSocket -> Lambda (message handler)
+  |
+Anthropic Claude Opus 4.5 (with web search)
+  |
+Streaming Response -> User
+
+REST API Flow:
+User -> API Gateway REST -> Lambda (conversation/prompt/usage)
+  |
+DynamoDB (conversations, prompts, usage tracking)
 ```
 
-## 🔧 개발 환경
+## Project Structure
+```
+.
+├── README.md
+├── AWS_STACK_DOCUMENTATION.md
+├── upgrade-f1-anthropic.sh    # Backend deployment
+├── upgrade-f1-frontend.sh     # Frontend deployment
+├── config/                    # Environment configuration
+├── backend/
+│   ├── handlers/              # Lambda handlers
+│   │   ├── api/              # REST API handlers
+│   │   └── websocket/        # WebSocket handlers
+│   ├── lib/                  # anthropic_client, bedrock_client, citation_formatter
+│   ├── services/             # websocket_service
+│   ├── src/                  # Core business logic
+│   │   ├── models/
+│   │   ├── repositories/
+│   │   └── services/
+│   └── utils/
+└── frontend/
+    ├── src/
+    │   ├── features/         # auth, chat, dashboard
+    │   ├── shared/
+    │   └── config.js
+    ├── public/
+    ├── package.json
+    └── vite.config.js
+```
 
-### 배포
+## Quick Start
 
+### Prerequisites
+- AWS CLI configured
+- Node.js 18+
+- Python 3.9+
+- AWS Account: 887078546492
+
+### Deployment
 ```bash
-# 백엔드 Lambda 함수 배포
+# Full deployment (frontend + backend)
+./upgrade-f1-anthropic.sh && ./upgrade-f1-frontend.sh
+
+# Frontend only
+./upgrade-f1-frontend.sh
+
+# Backend only
+./upgrade-f1-anthropic.sh
+```
+
+## Current Deployment
+Status: Production Ready
+
+Updated: 2025-12-21
+
+## URLs
+| Resource | URL |
+|----------|-----|
+| Primary Domain | https://f1.sedaily.ai |
+| CloudFront | https://drbxxcxyi7jpk.cloudfront.net |
+| CloudFront ID | E1HNX1UP39MOOM |
+
+## AWS Resources (us-east-1)
+
+### Lambda Functions
+| Function | Purpose |
+|----------|---------|
+| f1-websocket-connect-two | WebSocket connection handler |
+| f1-websocket-message-two | Main chat handler (Claude API + Web Search) |
+| f1-websocket-disconnect-two | WebSocket disconnect handler |
+| f1-conversation-api-two | Conversation CRUD |
+| f1-prompt-crud-two | Prompt management |
+| f1-usage-handler-two | Usage tracking |
+
+### DynamoDB Tables
+| Table | Purpose |
+|-------|---------|
+| f1-conversations-two | Chat history |
+| f1-messages-two | Message history |
+| f1-prompts-two | System prompts |
+| f1-files-two | File metadata |
+| f1-usage-two | Usage statistics |
+| f1-websocket-connections-two | Active connections |
+
+### Other Resources
+| Resource | ID/Name |
+|----------|---------|
+| S3 Bucket | f1-frontend-two |
+| Secrets Manager | foreign-v1 (Anthropic API key) |
+
+## AI Configuration
+| Setting | Value |
+|---------|-------|
+| Primary Provider | Anthropic API |
+| Model | claude-opus-4-5-20251101 |
+| Max Tokens | 4096 |
+| Temperature | 0.3 |
+| Fallback | AWS Bedrock |
+| Web Search | Enabled (max 5 uses) |
+
+## Change History
+
+### Phase 5: Lambda Timeout Fix (2025-12-21)
+- **Lambda timeout increased**: 120s → 180s (3 minutes)
+- Fixed: Long AI responses (foreign news translation) getting cut off
+- All 6 Lambda functions updated with new timeout
+- Verified: Prompt loading from DynamoDB working correctly
+  - Instruction: 18,315 chars
+  - Files: 8 reference files
+  - Total system prompt: 108,977 chars
+
+### Phase 4: Final Testing & Deployment Verification (2025-12-21)
+- **Production deployment verified** - All components tested and working
+- Backend: 6/6 Lambda functions deployed successfully
+- Frontend: S3 + CloudFront deployment complete
+- Authentication: Cognito login verified
+- HTTP Status: 200 OK
+- All deployment scripts tested and verified
+
+### Phase 3: Project Cleanup (2025-12-21)
+- Removed archive directories: `cleanup-archive/`, `scripts-backup/`
+- Deleted build artifacts: `*.zip`, `__pycache__/`, `node_modules/`, `dist/`
+- Deleted test files: `test_caching_optimization.py`
+- Consolidated documentation into README
+- Final structure: Minimal, clean, production-focused
+
+### Phase 2: Web Search Integration (2025-12-14)
+- Added Anthropic native web search functionality
+- Implemented auto citation formatting with source credibility:
+  - Official news sources (YTN, Yonhap)
+  - Government/public institutions (.gov.kr, .go.kr)
+  - General websites
+- Added `citation_formatter.py` for source formatting
+- Web search triggers: "today", "latest", "news" keywords
+
+### Phase 1: Claude 4.5 Opus Migration (2025-12)
+- Migrated from AWS Bedrock to Anthropic Direct API
+- Model: `claude-opus-4-5-20251101` (Claude Opus 4.5)
+- Added dual AI provider support:
+  - Primary: Anthropic API (direct)
+  - Fallback: AWS Bedrock
+- Added `anthropic_client.py`:
+  - Streaming response support
+  - Secrets Manager integration
+  - Web search tool configuration
+
+### Initial Setup
+- Project initialization with React + Vite frontend
+- AWS infrastructure: S3, CloudFront, API Gateway, Lambda, DynamoDB
+- WebSocket real-time chat implementation
+- REST API for conversation/prompt/usage management
+
+## Deployment Guide
+
+### Deploy Commands
+```bash
+# Backend (Lambda functions)
 ./upgrade-f1-anthropic.sh
 
-# 프론트엔드 S3 배포
+# Frontend (S3 + CloudFront)
 ./upgrade-f1-frontend.sh
+
+# Full deployment
+./upgrade-f1-anthropic.sh && ./upgrade-f1-frontend.sh
 ```
 
-### 환경 설정
+### Environment Configuration
+Lambda environment variables:
+```json
+{
+  "USE_ANTHROPIC_API": "true",
+  "ANTHROPIC_SECRET_NAME": "foreign-v1",
+  "ANTHROPIC_MODEL_ID": "claude-opus-4-5-20251101",
+  "AI_PROVIDER": "anthropic_api",
+  "FALLBACK_TO_BEDROCK": "true",
+  "ENABLE_NATIVE_WEB_SEARCH": "true",
+  "WEB_SEARCH_MAX_USES": "5",
+  "MAX_TOKENS": "4096",
+  "TEMPERATURE": "0.3"
+}
+```
 
+### Log Monitoring
 ```bash
-# 환경변수 확인
-aws lambda get-function-configuration \
-  --function-name f1-websocket-message-two \
-  --query 'Environment.Variables'
-
-# 로그 모니터링
+# Real-time Lambda logs
 aws logs tail /aws/lambda/f1-websocket-message-two --follow
+
+# Check function status
+aws lambda get-function --function-name f1-websocket-message-two
 ```
 
-## 📊 모니터링
+## Web Search Feature
 
-### 핵심 지표
+### Trigger Keywords
+- Korean: "오늘", "최신", "뉴스", "현재"
+- English: "today", "latest", "news", "current"
 
-- **응답 시간**: WebSocket 메시지 처리 속도
-- **에러율**: Lambda 함수 실행 실패율
-- **웹 검색 사용량**: 일일 검색 요청 수
-- **사용자 활동**: 대화 세션 수
+### Citation Format
+Sources are automatically formatted with credibility indicators:
+- Official news: YTN, Yonhap News, major outlets
+- Government: .gov.kr, .go.kr domains
+- General: Other web sources
 
-### CloudWatch 대시보드
+### Usage Limit
+- Maximum 5 web searches per conversation
+- Automatic fallback to cached knowledge when limit reached
 
+## Tech Stack
+
+### Backend
+- Python 3.9
+- AWS Lambda
+- Anthropic Claude Opus 4.5
+- DynamoDB
+- API Gateway (REST + WebSocket)
+- Secrets Manager
+
+### Frontend
+- React 18.2
+- Vite 4.4
+- Tailwind CSS 3.3
+- S3 + CloudFront
+
+## Monitoring
+
+### CloudWatch Metrics
+- Lambda invocations and errors
+- API Gateway request count
+- DynamoDB read/write capacity
+- WebSocket connection count
+
+### Key Metrics
+- Response time: WebSocket message processing speed
+- Error rate: Lambda function execution failures
+- Web search usage: Daily search request count
+- User activity: Conversation session count
+
+## Troubleshooting
+
+### Common Issues
+
+1. **WebSocket not connecting**
+   - Check Lambda logs for errors
+   - Verify API Gateway WebSocket stage is deployed
+
+2. **AI responses not working**
+   - Check Anthropic API key in Secrets Manager (foreign-v1)
+   - Verify Lambda environment variables
+
+3. **Web search not triggering**
+   - Check if trigger keywords are present in query
+   - Verify `ENABLE_NATIVE_WEB_SEARCH=true`
+   - Check if search limit (5) has been reached
+
+### Rollback
 ```bash
-# Lambda 메트릭 확인
-aws cloudwatch get-metric-statistics \
-  --namespace AWS/Lambda \
-  --metric-name Invocations \
-  --dimensions Name=FunctionName,Value=f1-websocket-message-two \
-  --start-time 2025-12-14T00:00:00Z \
-  --end-time 2025-12-14T23:59:59Z \
-  --period 3600 \
-  --statistics Sum
+# Rollback using git
+git checkout <commit-hash> -- backend/
+./upgrade-f1-anthropic.sh
 ```
 
-## 🛠️ 개발 가이드
+## Related Documents
+- [AWS_STACK_DOCUMENTATION.md](./AWS_STACK_DOCUMENTATION.md) - AWS resource details
 
-### 프로젝트 구조
-
-```
-├── backend/                 # Lambda 함수 소스
-│   ├── handlers/            # API & WebSocket 핸들러
-│   ├── lib/                 # AI 클라이언트 라이브러리
-│   ├── services/            # 비즈니스 로직
-│   └── utils/               # 공통 유틸리티
-│
-├── frontend/                # React 프론트엔드
-│   ├── src/                 # 소스 코드
-│   └── public/              # 정적 파일
-│
-├── config/                  # 환경 설정
-└── docs/                    # 문서
-    ├── DEPLOYMENT.md        # 배포 가이드
-    └── AWS_STACK_DOCUMENTATION.md  # AWS 구조
-```
-
-### 코드 품질
-
-- **Python 3.9**: Lambda 런타임
-- **Type Hints**: 타입 안정성
-- **Error Handling**: 포괄적 예외 처리
-- **Logging**: 구조화된 로그
-
-## 📚 참고 문서
-
-- [배포 가이드](./DEPLOYMENT.md)
-- [AWS 스택 문서](./AWS_STACK_DOCUMENTATION.md)
-- [백업 및 복구](./scripts-backup/)
-
-## 🔐 보안
-
-- **API 키**: AWS Secrets Manager (foreign-v1)
-- **IAM 역할**: 최소 권한 원칙
-- **VPC**: 필요시 네트워크 격리
-- **암호화**: 저장/전송 중 데이터 암호화
-
-## 📞 지원
-
-- **로그 확인**: CloudWatch Logs
-- **모니터링**: AWS X-Ray
-- **알람**: CloudWatch Alarms
-- **백업**: scripts-backup/ 폴더
-
----
-
-**마지막 업데이트**: 2025-12-14 (웹 검색 기능 추가)  
-**라이센스**: Private  
-**관리자**: Seoul Economic Daily AI Team
+## License
+Proprietary - Seoul Economic Daily

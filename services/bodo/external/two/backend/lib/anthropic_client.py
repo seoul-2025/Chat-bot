@@ -9,10 +9,15 @@ import logging
 import requests
 import boto3
 import uuid
-from typing import Dict, Any, Iterator, Optional
+import sys
+from typing import Dict, Any, Iterator, Optional, List
 from datetime import datetime, timezone, timedelta
 
-logger = logging.getLogger(__name__)
+# Add utils to path for setup_logger
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+from utils.logger import setup_logger
+
+logger = setup_logger(__name__)
 
 # Secrets Manager 클라이언트
 secrets_client = boto3.client('secretsmanager', region_name='us-east-1')
@@ -64,14 +69,20 @@ def _replace_template_variables(prompt: str) -> str:
 
 
 def _create_dynamic_context() -> str:
-    """동적 컨텍스트 생성 (user_message에 추가용)"""
+    """동적 컨텍스트 생성 (user_message에 추가용) - 캐싱 최적화"""
     current_time = datetime.now(kst)
-    session_id = str(uuid.uuid4())[:8]
-    
-    return f"""[현재 세션 정보]
-- 현재 시간: {current_time.strftime('%Y-%m-%d %H:%M:%S KST')}
-- 오늘 날짜: {current_time.strftime('%Y년 %m월 %d일')}
-- 세션 ID: {session_id}
+
+    return f"""[⚠️ 중요: 현재 세션 정보 - 반드시 참고하세요]
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+📅 현재 연도: {current_time.year}년
+📅 오늘 날짜: {current_time.strftime('%Y년 %m월 %d일')}
+🕐 현재 시간: {current_time.strftime('%Y-%m-%d %H:%M:%S KST')}
+📍 사용자 위치: 대한민국 (Asia/Seoul)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+⚠️ 중요: 응답에서 날짜나 연도를 언급할 때 반드시 위의 현재 날짜 정보를 사용하세요.
+2024년이라고 하지 마세요. 현재는 {current_time.year}년입니다.
+
 """
 
 
@@ -94,7 +105,8 @@ def stream_anthropic_response(
     user_message: str,
     system_prompt: str,
     api_key: Optional[str] = None,
-    enable_web_search: bool = False
+    enable_web_search: bool = False,
+    conversation_history: List[Dict] = None
 ) -> Iterator[str]:
     """
     Anthropic API를 통한 스트리밍 응답 생성 (Prompt Caching 최적화)
@@ -126,17 +138,29 @@ def stream_anthropic_response(
         
         # 정적 컨텍스트는 system_prompt에 포함 (캐싱됨)
         static_system_prompt = _replace_template_variables(system_prompt)
-        
+
         # 동적 컨텍스트는 user_message에 추가 (캐싱 무효화 방지)
         dynamic_context = _create_dynamic_context()
         enhanced_user_message = f"{dynamic_context}\n{user_message}"
-        
+
+        # 대화 히스토리에서 messages 배열 구성 (캐싱 최적화)
+        messages = []
+        if conversation_history:
+            for msg in conversation_history:
+                role = msg.get('role', 'user')
+                content = msg.get('content', '')
+                if content and role in ['user', 'assistant']:
+                    messages.append({"role": role, "content": content})
+
+        # 현재 사용자 메시지 추가 (동적 컨텍스트 포함)
+        messages.append({"role": "user", "content": enhanced_user_message})
+
         # 프롬프트 캐싱 적용 (system만 캐싱)
         api_params = {
             "model": OPUS_MODEL,
             "max_tokens": MAX_TOKENS,
             "temperature": TEMPERATURE,
-            "messages": [{"role": "user", "content": enhanced_user_message}],
+            "messages": messages,
             "stream": True
         }
         
@@ -146,10 +170,10 @@ def stream_anthropic_response(
                 {
                     "type": "text",
                     "text": static_system_prompt,
-                    "cache_control": {"type": "ephemeral", "ttl": CACHE_TTL}  # 1시간 캐시
+                    "cache_control": {"type": "ephemeral"}  # 캐싱 활성화
                 }
             ]
-            logger.info(f"✅ Prompt caching enabled (TTL: {CACHE_TTL})")
+            logger.info(f"✅ Prompt caching enabled")
         else:
             api_params["system"] = static_system_prompt
         
@@ -214,22 +238,41 @@ def stream_anthropic_response(
                                 if text:
                                     yield text
                         
-                        # Usage 정보 처리 (message_stop 이벤트)
-                        elif data.get('type') == 'message_stop':
-                            usage = data.get('usage', {})
+                        # Usage 정보 처리 (message_start 이벤트에서 추출)
+                        elif data.get('type') == 'message_start':
+                            message = data.get('message', {})
+                            usage = message.get('usage', {})
                             if usage:
                                 total_usage['input_tokens'] = usage.get('input_tokens', 0)
                                 total_usage['output_tokens'] = usage.get('output_tokens', 0)
                                 total_usage['cache_read_input_tokens'] = usage.get('cache_read_input_tokens', 0)
                                 total_usage['cache_creation_input_tokens'] = usage.get('cache_creation_input_tokens', 0)
-                                
+
+                                cache_read = total_usage['cache_read_input_tokens']
+                                cache_write = total_usage['cache_creation_input_tokens']
+
+                                # 캐시 HIT/MISS 로깅
+                                if cache_read > 0:
+                                    logger.info(f"🎯 PROMPT CACHE HIT! cache_read: {cache_read} tokens")
+                                    # 캐시로 인한 비용 절감 계산
+                                    PRICE_INPUT = 5.0  # per 1M tokens
+                                    PRICE_CACHE_READ = 0.50  # per 1M tokens
+                                    savings = (cache_read / 1_000_000) * (PRICE_INPUT - PRICE_CACHE_READ)
+                                    logger.info(f"💵 Estimated savings from cache: ${savings:.6f}")
+                                elif cache_write > 0:
+                                    logger.info(f"📝 PROMPT CACHE MISS - cache_write: {cache_write} tokens (next request will hit)")
+
                                 # 비용 계산 및 로깅
                                 cost = _calculate_cost(total_usage)
-                                logger.info(f"💰 API Cost: ${cost:.6f} | "
-                                          f"input: {total_usage['input_tokens']}, "
-                                          f"output: {total_usage['output_tokens']}, "
-                                          f"cache_read: {total_usage['cache_read_input_tokens']}, "
-                                          f"cache_write: {total_usage['cache_creation_input_tokens']}")
+                                logger.info(f"💰 Token Usage: input={total_usage['input_tokens']}, "
+                                          f"output={total_usage['output_tokens']}, "
+                                          f"cache_read={cache_read}, "
+                                          f"cache_write={cache_write}")
+                                logger.info(f"💰 API Cost: ${cost:.6f}")
+
+                        # 메시지 종료
+                        elif data.get('type') == 'message_stop':
+                            logger.info("✅ Message complete")
                         
                         # 에러 처리
                         elif data.get('type') == 'error':
@@ -272,41 +315,40 @@ class AnthropicClient:
         user_message: str,
         system_prompt: str,
         conversation_context: str = "",
+        conversation_history: List[Dict] = None,
         enable_web_search: bool = None
     ) -> Iterator[str]:
         """
-        스트리밍 응답 생성
-        
+        스트리밍 응답 생성 (Prompt Caching 최적화)
+
         Args:
             user_message: 사용자 메시지
-            system_prompt: 시스템 프롬프트
-            conversation_context: 대화 컨텍스트
-        
+            system_prompt: 시스템 프롬프트 (캐싱됨)
+            conversation_context: 대화 컨텍스트 문자열 (deprecated, 사용 안 함)
+            conversation_history: 대화 히스토리 리스트 (messages 배열로 전달)
+            enable_web_search: 웹 검색 활성화 여부
+
         Yields:
             응답 청크
         """
         try:
-            # 대화 컨텍스트 포함
-            if conversation_context:
-                full_prompt = f"{conversation_context}\n\n{system_prompt}"
-            else:
-                full_prompt = system_prompt
-            
-            logger.info(f"Streaming with Anthropic API")
-            
+            # 캐싱 최적화: system_prompt는 정적으로 유지 (conversation_context 미포함)
+            logger.info(f"Streaming with Anthropic API (Prompt Caching enabled)")
+
             # 웹 검색 설정 결정
             if enable_web_search is None:
                 enable_web_search = ENABLE_NATIVE_WEB_SEARCH
-            
-            # Anthropic API 스트리밍
+
+            # Anthropic API 스트리밍 (conversation_history는 messages 배열로 전달)
             for chunk in stream_anthropic_response(
                 user_message=user_message,
-                system_prompt=full_prompt,
+                system_prompt=system_prompt,  # 정적 시스템 프롬프트 (캐싱됨)
                 api_key=self.api_key,
-                enable_web_search=enable_web_search
+                enable_web_search=enable_web_search,
+                conversation_history=conversation_history  # 대화 히스토리 → messages 배열
             ):
                 yield chunk
-        
+
         except Exception as e:
             logger.error(f"Error in stream_response: {str(e)}")
             yield f"\n\n[오류] 응답 생성 실패: {str(e)}"

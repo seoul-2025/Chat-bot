@@ -12,7 +12,17 @@ from typing import Dict, Any, Iterator, Optional
 import uuid
 from datetime import datetime, timezone, timedelta
 
-logger = logging.getLogger(__name__)
+# Lambda 환경에서 로깅 설정
+try:
+    from utils.logger import setup_logger
+    logger = setup_logger(__name__)
+except ImportError:
+    logger = logging.getLogger(__name__)
+    if not logger.handlers:
+        handler = logging.StreamHandler()
+        handler.setFormatter(logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s'))
+        logger.addHandler(handler)
+    logger.setLevel(logging.INFO)
 
 # Secrets Manager 클라이언트
 secrets_client = boto3.client('secretsmanager', region_name='us-east-1')
@@ -155,7 +165,7 @@ def stream_anthropic_response(
                     {
                         "type": "text",
                         "text": static_system_prompt,
-                        "cache_control": {"type": "ephemeral", "ttl": "1h"}  # 1시간 캐시
+                        "cache_control": {"type": "ephemeral"}  # Anthropic 자동 TTL 관리 (~5분)
                     }
                 ],
                 "messages": [
@@ -203,47 +213,91 @@ def stream_anthropic_response(
             yield f"[오류] {error_msg}"
             return
         
-        # 스트리밍 응답 처리
+        # 사용량 추적
+        usage_info = {
+            'input_tokens': 0,
+            'output_tokens': 0,
+            'cache_read_input_tokens': 0,
+            'cache_creation_input_tokens': 0
+        }
+
+        # 스트리밍 응답 처리 (Anthropic SSE 형식)
         for line in response.iter_lines():
             if line:
                 line_text = line.decode('utf-8')
-                
+
+                # event: 라인 무시 (Anthropic SSE 형식)
+                if line_text.startswith('event: '):
+                    continue
+
                 # SSE 형식 파싱
                 if line_text.startswith('data: '):
                     data_str = line_text[6:]  # 'data: ' 제거
-                    
+
                     if data_str == '[DONE]':
-                        logger.info("Streaming completed")
+                        logger.info("Streaming completed (DONE marker)")
                         break
-                    
+
                     try:
                         data = json.loads(data_str)
-                        
+                        event_type = data.get('type', '')
+
+                        # 메시지 시작 이벤트 (사용량 정보 포함)
+                        if event_type == 'message_start':
+                            message = data.get('message', {})
+                            usage = message.get('usage', {})
+                            usage_info.update({
+                                'input_tokens': usage.get('input_tokens', 0),
+                                'cache_read_input_tokens': usage.get('cache_read_input_tokens', 0),
+                                'cache_creation_input_tokens': usage.get('cache_creation_input_tokens', 0)
+                            })
+                            logger.info(f"📥 message_start - input: {usage_info['input_tokens']}, "
+                                       f"cache_read: {usage_info['cache_read_input_tokens']}, "
+                                       f"cache_write: {usage_info['cache_creation_input_tokens']}")
+
+                            # 캐시 히트/미스 로깅
+                            if usage_info['cache_read_input_tokens'] > 0:
+                                logger.info(f"🎯 Anthropic Cache HIT! Read {usage_info['cache_read_input_tokens']} tokens from cache")
+                            if usage_info['cache_creation_input_tokens'] > 0:
+                                logger.info(f"💾 Anthropic Cache MISS! Created cache with {usage_info['cache_creation_input_tokens']} tokens")
+
                         # 컨텐츠 블록 델타 처리
-                        if data.get('type') == 'content_block_delta':
+                        elif event_type == 'content_block_delta':
                             delta = data.get('delta', {})
                             if delta.get('type') == 'text_delta':
                                 text = delta.get('text', '')
                                 if text:
                                     yield text
-                        
-                        # Usage 정보 로깅 (스트리밍 종료 시)
-                        elif data.get('type') == 'message_stop':
+
+                        # 메시지 델타 (최종 사용량 - output_tokens)
+                        elif event_type == 'message_delta':
                             usage = data.get('usage', {})
-                            if usage:
-                                _log_usage(usage)
-                        
+                            if usage.get('output_tokens'):
+                                usage_info['output_tokens'] = usage.get('output_tokens', 0)
+                                logger.info(f"📤 message_delta - output: {usage_info['output_tokens']}")
+
+                        # 메시지 종료 (Anthropic SSE 종료 이벤트)
+                        elif event_type == 'message_stop':
+                            logger.info("Streaming completed (message_stop)")
+                            _log_usage(usage_info)
+                            break
+
                         # 에러 처리
-                        elif data.get('type') == 'error':
+                        elif event_type == 'error':
                             error = data.get('error', {})
                             error_msg = error.get('message', '알 수 없는 오류')
                             logger.error(f"API Error: {error_msg}")
                             yield f"\n\n[오류] {error_msg}"
                             break
-                    
+
                     except json.JSONDecodeError as e:
-                        logger.warning(f"Failed to parse SSE data: {e}")
+                        logger.warning(f"Failed to parse SSE data: {data_str[:100]}... Error: {e}")
                         continue
+
+        # 스트림 종료 시 사용량 로깅 (message_stop 없이 종료된 경우)
+        if usage_info['input_tokens'] > 0 or usage_info['output_tokens'] > 0:
+            logger.info(f"📊 Final usage: {usage_info}")
+            _log_usage(usage_info)
     
     except requests.exceptions.RequestException as e:
         logger.error(f"Request error: {str(e)}")
@@ -290,17 +344,12 @@ class AnthropicClient:
             응답 청크
         """
         try:
-            # 대화 컨텍스트 포함
-            if conversation_context:
-                full_prompt = f"{conversation_context}\n\n{system_prompt}"
-            else:
-                full_prompt = system_prompt
-            
-            # 정적 템플릿 변수 치환 (캐싱 최적화)
-            static_system_prompt = self._replace_template_variables(full_prompt)
-            
-            # 동적 컨텍스트를 user_message에 추가
-            enhanced_user_message = self._create_dynamic_message(user_message)
+            # 시스템 프롬프트는 정적으로 유지 (캐싱 최적화)
+            # 대화 컨텍스트는 user_message에 추가하여 캐시 무효화 방지
+            static_system_prompt = self._replace_template_variables(system_prompt)
+
+            # 동적 컨텍스트와 대화 컨텍스트를 user_message에 추가
+            enhanced_user_message = self._create_message_with_context(user_message, conversation_context)
             
             logger.info(f"Streaming with Anthropic API (caching: {enable_caching})")
             

@@ -10,7 +10,7 @@ set -e
 
 # Configuration
 PROJECT_ROOT="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
-CONFIG_FILE="$PROJECT_ROOT/config/t1-production.env"
+CONFIG_FILE="$PROJECT_ROOT/.env.deploy"
 TIMESTAMP=$(date +%Y%m%d_%H%M%S)
 LOG_FILE="$PROJECT_ROOT/logs/deploy_${TIMESTAMP}.log"
 

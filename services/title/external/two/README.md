@@ -1,138 +1,407 @@
-# t1.sedaily.ai - AI 대화 서비스
+# t1.sedaily.ai
+AI Conversation Service - Claude Opus 4.5 based real-time chat with web search
 
-## 📋 개요
-Claude Opus 4.5 기반 실시간 AI 대화 서비스  
-웹 검색 기능이 통합된 최신 정보 제공 플랫폼
+Last Updated: 2025-12-21
 
-## 🏗️ 아키텍처
-- **Frontend**: React + Vite (S3 + CloudFront)
-- **Backend**: AWS Lambda (Python 3.11)
-- **AI Provider**: Anthropic Claude Opus 4.5 with Web Search
-- **Database**: DynamoDB + Aurora PostgreSQL (Vector DB)
-- **Real-time**: WebSocket API (API Gateway)
+## Overview
+t1.sedaily.ai is an AI-powered conversation service built on Anthropic Claude Opus 4.5. It features real-time WebSocket communication, native web search integration, and prompt caching for cost optimization.
 
-## 📁 프로젝트 구조
+Live: https://t1.sedaily.ai
+
+## Features
+- Real-time Chat: WebSocket-based streaming responses
+- Web Search: Anthropic's native web search integration (2025 data)
+- Prompt Caching: 90% cost reduction with ephemeral cache (1-hour TTL)
+- DynamoDB Caching: Permanent prompt cache in Lambda container
+- Multiple AI Providers: Anthropic API primary, Bedrock fallback
+- RAG Support: Aurora PostgreSQL vector database (optional)
+
+## Architecture
+```
+Frontend (React + Vite)
+  ↓
+CloudFront (CDN)
+  ↓
+S3 (Static Hosting)
+
+WebSocket Flow:
+User → API Gateway WebSocket → Lambda (message handler)
+  ↓
+Anthropic Claude Opus 4.5 (with web search)
+  ↓
+Streaming Response → User
+
+REST API Flow:
+User → API Gateway REST → Lambda (conversation/prompt/usage)
+  ↓
+DynamoDB (conversations, prompts, usage tracking)
+```
+
+## Project Structure
 ```
 .
-├── frontend/           # React 애플리케이션
-├── backend/           # Lambda 함수 코드
-│   ├── handlers/      # WebSocket & REST 핸들러
-│   └── lib/          # 공통 라이브러리
-├── config/           # 환경 설정
-│   └── t1-production.env  # 프로덕션 설정
-├── upgrade-scripts/  # 아카이빙된 배포 스크립트
-└── logs/            # 배포 로그
+├── .env.deploy           # Production configuration (gitignored)
+├── .gitignore
+├── README.md
+├── deploy-main.sh        # Main deployment (interactive menu)
+├── deploy-backend.sh     # Backend only
+├── deploy-frontend.sh    # Frontend only
+├── backend/
+│   ├── handlers/         # Lambda handlers
+│   ├── lib/              # anthropic_client, bedrock_client
+│   ├── services/         # websocket_service
+│   ├── src/              # Core business logic
+│   ├── utils/            # Utility functions
+│   └── requirements.txt
+└── frontend/
+    ├── src/
+    ├── public/
+    └── package.json
 ```
 
-## 🚀 빠른 시작
+## Quick Start
 
-### 배포
+### Prerequisites
+- AWS CLI configured
+- Node.js 18+
+- Python 3.11+
+- AWS Account: 887078546492
+
+### Deployment
 ```bash
-# 전체 배포
+# Full deployment (frontend + backend)
 ./deploy-main.sh
+# Select option 1
 
-# 백엔드만 배포
-./deploy-backend.sh
-
-# 프론트엔드만 배포
-./deploy-frontend.sh
-```
-
-## 📚 상세 문서
-
-- **[AWS_STACK_DOCUMENTATION.md](./AWS_STACK_DOCUMENTATION.md)** - AWS 인프라 상세 문서
-- **[RESOURCE_MAP.json](./RESOURCE_MAP.json)** - 구조화된 리소스 맵핑
-
-## 🔧 주요 기능
-
-### 웹 검색 통합
-- Anthropic Claude의 네이티브 웹 검색 기능 활용
-- 실시간 최신 정보 제공 (2025년 기준)
-- 자동 출처 표시 및 신뢰도 표시
-
-### 환경 설정
-```bash
-./deploy-main.sh
-```
-대화형 메뉴를 통해 배포 옵션 선택:
-1. 전체 배포 (프론트엔드 + 백엔드)
-2. 프론트엔드만 배포
-3. 백엔드만 배포
-4. Lambda 패키징만
-5. Lambda 환경변수 업데이트
-6. CloudFront 캐시 무효화
-
-### 개별 배포 스크립트
-```bash
-./deploy-frontend.sh   # 프론트엔드만 배포
-./deploy-backend.sh    # 백엔드만 배포  
-./update-env.sh       # 환경변수만 업데이트
-```
-
-## 🔧 설정
-
-### 환경 설정
-`config/t1-production.env` 파일에서 모든 설정 관리
-
-주요 설정:
-- `CUSTOM_DOMAIN`: https://t1.sedaily.ai
-- `S3_BUCKET`: nexus-title-hub-frontend
-- `CLOUDFRONT_DISTRIBUTION_ID`: EIYU5SFVTHQMN
-- `LAMBDA_WS_MESSAGE`: nx-tt-dev-ver3-websocket-message
-- `ANTHROPIC_SECRET_NAME`: claude-opus-45-api-key
-
-## 📝 유지보수 가이드
-
-### 코드 업데이트 후 배포
-```bash
-# 프론트엔드 변경 시
+# Frontend only
 ./deploy-frontend.sh
 
-# 백엔드 변경 시
+# Backend only
 ./deploy-backend.sh
-
-# 전체 배포
-./deploy-main.sh
-# 옵션 1 선택
 ```
 
-### 환경변수 변경
-1. `config/t1-production.env` 수정
-2. `./update-env.sh` 실행
+## Current Deployment
+Status: Production Ready
 
-### 로그 확인
+Updated: 2025-12-21
+
+## URLs
+| Resource | URL |
+|----------|-----|
+| Primary Domain | https://t1.sedaily.ai |
+| CloudFront | https://d1s58eamawxu4.cloudfront.net |
+| REST API | https://qyfams2iva.execute-api.us-east-1.amazonaws.com/prod |
+| WebSocket API | wss://hsdpbajz23.execute-api.us-east-1.amazonaws.com |
+
+## AWS Resources (us-east-1)
+
+### Lambda Functions
+| Function | Purpose |
+|----------|---------|
+| nx-tt-dev-ver3-websocket-connect | WebSocket connection handler |
+| nx-tt-dev-ver3-websocket-message | Main chat handler (Claude API) |
+| nx-tt-dev-ver3-websocket-disconnect | WebSocket disconnect handler |
+| nx-tt-dev-ver3-conversation-api | Conversation CRUD |
+| nx-tt-dev-ver3-prompt-crud | Prompt management |
+| nx-tt-dev-ver3-usage-handler | Usage tracking |
+
+### DynamoDB Tables
+| Table | Purpose |
+|-------|---------|
+| nx-tt-dev-ver3-conversations | Chat history |
+| nx-tt-dev-ver3-prompts | System prompts |
+| nx-tt-dev-ver3-files | File metadata |
+| nx-tt-dev-ver3-usage-tracking | API usage |
+| nx-tt-dev-ver3-websocket-connections | Active connections |
+
+### Other Resources
+- S3 Bucket: nexus-title-hub-frontend
+- CloudFront Distribution: EIYU5SFVTHQMN
+- Aurora Cluster: nx-tt-vector-db (PostgreSQL)
+- Secrets Manager: title-v1 (Anthropic API key)
+
+## AI Configuration
+| Setting | Value |
+|---------|-------|
+| Primary Provider | Anthropic API |
+| Model | claude-opus-4-5-20251101 |
+| Max Tokens | 4096 |
+| Temperature | 0.3 |
+| Fallback | AWS Bedrock |
+| Web Search | Enabled |
+
+## Change History
+
+### Phase 9: Cognito Authentication Fix (2025-12-21)
+- **Fixed Cognito Login Error** - `InvalidParameterException: clientId empty`
+- Root cause: Missing `frontend/.env` file (deleted during cleanup)
+- Solution: Created `frontend/.env` with Cognito configuration
+  - User Pool: `sedaily.ai_cognito` (`us-east-1_ohLOswurY`)
+  - Client ID: `4m4edj8snokmhqnajhlj41h9n2` (`nx-tt-dev-ver3-web-client`)
+- Rebuilt and redeployed frontend to S3
+- CloudFront cache invalidated
+- Verified: Login functionality working correctly
+
+### Phase 8: Prompt Caching Optimization (2025-12-21)
+- **Fixed Anthropic Prompt Caching** - Now working with 90% cost reduction
+- Problem: Dynamic content (date/time, conversation history) in system prompt was breaking cache
+- Solution:
+  1. Moved dynamic date/time to `user_message` via `create_dynamic_context()`
+  2. Made `enhance_system_prompt_with_context()` static (no timestamps)
+  3. Removed conversation history from `system_prompt`
+  4. Conversation history now passed as proper `messages` array
+- Added cache tracking logs:
+  - `🎯 PROMPT CACHE HIT! cache_read: X tokens`
+  - `📝 PROMPT CACHE MISS - cache_write: X tokens`
+  - `💰 Token Usage: input=X, output=Y, cache_read=Z`
+  - `💵 Estimated savings from cache: $X.XX`
+- Fixed `lib.anthropic_client` logging (using `setup_logger()`)
+- Cache performance verified:
+  - System prompt: ~74,615 tokens cached
+  - Savings per request: ~$0.34
+  - Cache hit rate: 100% after first request
+
+### Phase 7: Frontend Refactoring (2025-12-20)
+- Removed duplicate `usageService.js` (893 lines)
+  - `dashboard/services/usageService.js` deleted
+  - `Dashboard.jsx` now imports from `chat/services/usageService.js`
+- Fixed `authService.js` import path bug (`../../` → `../../../`)
+- Fixed `deploy-frontend.sh` build path (`build/` → `dist/`)
+- Removed empty folders:
+  - `features/chat/utils/`
+  - `features/profile/hooks/`
+
+### Phase 6: Project Cleanup (2025-12-20)
+- Removed unused files: `serverless.yml`, `handler.js`, `index.js`
+- Removed unused folders: `infrastructure/`, `terraform/`
+- Removed root `package.json`, `package-lock.json`
+- Deleted unused backend modules:
+  - `src/config/aws.py`
+  - `src/services/prompt_service.py`, `usage_service.py`
+  - `src/repositories/prompt_repository.py`, `usage_repository.py`
+  - `src/models/prompt.py`, `usage.py`
+- Moved config: `config/t1-production.env` -> `.env.deploy`
+- Added `.gitignore` for sensitive files
+- README restructured to reference format with full change history
+
+### Phase 5: Anthropic Prompt Optimization (2025-12-20)
+- Added `create_enhanced_system_prompt()` function to `anthropic_client.py`
+- CoT-based 5-step systematic prompt structure:
+  1. YOUR MISSION - Role and goal definition
+  2. CORE INSTRUCTIONS - Admin-configured guidelines
+  3. KNOWLEDGE BASE - DynamoDB files reference
+  4. STEP-BY-STEP PROCESS - 5-step workflow
+  5. CRITICAL MISTAKES TO AVOID - Prohibited actions
+- Permanent DynamoDB prompt caching (Lambda container lifetime)
+- Prompt caching with 1-hour ephemeral TTL (90% cost savings)
+- Secrets Manager consolidated to `title-v1`
+- Removed unused RAG code (`USE_RAG=false`)
+
+### Phase 4: Cost Optimization (2025-12-16)
+- Implemented Anthropic Prompt Caching with `cache_control`
+- Added `calculate_cost()` function for real-time cost tracking
+- Dynamic/static context separation for improved cache hit rate:
+  - Static: user location, timezone (cacheable)
+  - Dynamic: current time, session ID (per request)
+- Claude Opus 4.5 pricing integration:
+  - Input: $5.00/1M tokens
+  - Output: $25.00/1M tokens
+  - Cache Read: $0.50/1M tokens (90% savings)
+- DynamoDB cache: 5-min TTL -> permanent (container lifetime)
+
+### Phase 3.5: Bug Fixes & Refactoring (2025-12-13)
+- Fixed data overwrite bug: added engine type to yearMonth key
+- Cleaned up backend package dependencies
+- Removed redundant deployment files
+- Improved Lambda deployment package structure
+
+### Phase 3: Claude 4.5 Opus Migration (2025-12-03)
+- Migrated from AWS Bedrock to Anthropic Direct API
+- Model: `claude-opus-4-5-20251101` (Claude Opus 4.5)
+- Added dual AI provider support:
+  - Primary: Anthropic API (direct)
+  - Fallback: AWS Bedrock (claude-sonnet-4)
+- Integrated native web search functionality
+- Added `anthropic_client.py`:
+  - Streaming response support
+  - Secrets Manager integration
+  - Web search tool configuration
+- Added `citation_formatter.py` for source formatting
+- Updated `bedrock_client_enhanced.py` as fallback
+
+### Phase 2.5: Monorepo Migration (2025-12-07)
+- Migrated to Nexus monorepo structure
+- Path: `nexus/services/title/external/two`
+- Added internal/two variants for all services
+- Unified deployment scripts across services
+
+### Phase 2: WebSocket Real-time Chat (2025-11-25)
+- Implemented WebSocket API via API Gateway
+- Created WebSocket Lambda handlers:
+  - `connect.py` - Connection management
+  - `message.py` - Chat message processing
+  - `disconnect.py` - Cleanup on disconnect
+  - `conversation_manager.py` - Conversation state
+- DynamoDB tables:
+  - `nx-tt-dev-ver3-websocket-connections` - Active connections
+  - `nx-tt-dev-ver3-conversations` - Chat history
+- Streaming response support for real-time AI output
+- Connection state management with DynamoDB
+
+### Phase 1.5: REST API Development (2025-11-20)
+- Created REST API handlers:
+  - `conversation.py` - Conversation CRUD operations
+  - `prompt.py` - System prompt management
+  - `usage.py` - Usage tracking and analytics
+- DynamoDB tables:
+  - `nx-tt-dev-ver3-prompts` - System prompts storage
+  - `nx-tt-dev-ver3-usage-tracking` - API usage metrics
+  - `nx-tt-dev-ver3-files` - File metadata
+- API Gateway REST API configuration
+- CORS configuration for frontend
+
+### Phase 1: Initial Setup (2025-11-15)
+- Project initialization
+- Frontend setup:
+  - React 18 with Vite
+  - TypeScript configuration
+  - Tailwind CSS styling
+  - Chat UI components
+- AWS infrastructure:
+  - S3 bucket: `nexus-title-hub-frontend`
+  - CloudFront distribution: `EIYU5SFVTHQMN`
+  - Custom domain: `t1.sedaily.ai`
+  - SSL certificate configuration
+- Basic Lambda function structure
+- Initial DynamoDB table design
+- Deployment scripts: `deploy-frontend.sh`, `deploy-backend.sh`
+
+## Deployment Guide
+
+### Deploy Menu Options
 ```bash
-# Lambda 로그 실시간 확인
+./deploy-main.sh
+```
+1. Full deployment (frontend + backend)
+2. Frontend only
+3. Backend only
+4. Lambda packaging only
+5. Lambda environment variables only
+6. CloudFront cache invalidation only
+
+### Environment Configuration
+All settings in `.env.deploy` (gitignored):
+- AWS resource IDs
+- Lambda function names
+- API Gateway endpoints
+- AI provider settings
+
+### Log Monitoring
+```bash
+# Real-time Lambda logs
 aws logs tail /aws/lambda/nx-tt-dev-ver3-websocket-message --follow
 
-# 배포 로그 확인
+# Deployment logs
 ls -la logs/
 ```
 
-## 🔍 모니터링
+## Cost Optimization
 
-### CloudWatch 대시보드
-- Lambda 함수 메트릭
-- API Gateway 요청 수
-- DynamoDB 읽기/쓰기 용량
+### Anthropic Prompt Caching (90% savings) ✅ Verified Working
+- System prompt (~74,615 tokens) cached with ephemeral TTL (5 min)
+- Cache hit: $0.50/1M tokens vs $5.00/1M tokens (90% discount)
+- **Savings per request: ~$0.34**
+- Cache key: Static system prompt (no dynamic date/time)
 
-### 비용 모니터링
-- AWS Cost Explorer에서 `nx-tt-dev-ver3` 태그로 필터링
+### Caching Architecture
+```
+System Prompt (Cached)
+├── Enhanced system prompt (CoT-based instructions)
+├── Knowledge base files from DynamoDB
+└── Static web search instructions
 
-## ⚠️ 주의사항
+User Message (Not Cached)
+├── Dynamic date/time context
+└── User's actual message
 
-1. **배포 전 확인**
-   - AWS 계정 ID: 887078546492
-   - Region: us-east-1
-   - 올바른 AWS 프로필 사용 중인지 확인
+Messages Array (Not Cached)
+└── Conversation history (user/assistant turns)
+```
 
-2. **캐시 무효화**
-   - 프론트엔드 배포 시 자동으로 CloudFront 캐시 무효화
-   - 수동 무효화: `./deploy-main.sh` → 옵션 6
+### DynamoDB Caching
+- Permanent in-memory cache in Lambda container
+- DB queries only on cold start
+- `✅ Cache HIT for T5 - DB query skipped`
 
-3. **Lambda 패키지 크기**
-   - 최대 250MB (압축)
-   - 현재 크기는 배포 시 표시됨
+### Cache Monitoring
+```bash
+# View cache performance in real-time
+aws logs tail /aws/lambda/nx-tt-dev-ver3-websocket-message --follow | grep -E "CACHE|Token|💰|🎯|📝"
+```
 
-## 📞 지원
-문제 발생 시 CloudWatch 로그 확인 후 담당자에게 연락
+### Estimated Monthly Cost
+| Service | Cost |
+|---------|------|
+| Anthropic Claude | ~$30 (with caching) |
+| Lambda | ~$10 |
+| DynamoDB | ~$5 |
+| S3/CloudFront | ~$5 |
+| Aurora | ~$30 |
+| **Total** | **~$80/month** |
+
+## Tech Stack
+
+### Backend
+- Python 3.11
+- AWS Lambda
+- Anthropic Claude Opus 4.5
+- DynamoDB
+- Aurora PostgreSQL (pgvector)
+- API Gateway (REST + WebSocket)
+
+### Frontend
+- React 18
+- Vite
+- TypeScript
+- Tailwind CSS
+- S3 + CloudFront
+
+## Monitoring
+
+### CloudWatch Metrics
+- Lambda invocations and errors
+- API Gateway request count
+- DynamoDB read/write capacity
+- WebSocket connection count
+
+### Cost Tracking
+AWS Cost Explorer with tag: `nx-tt-dev-ver3`
+
+## Troubleshooting
+
+### Common Issues
+
+1. **WebSocket not connecting**
+   - Check Lambda logs for errors
+   - Verify API Gateway WebSocket stage is deployed
+
+2. **AI responses not working**
+   - Check Anthropic API key in Secrets Manager
+   - Verify Lambda environment variables
+
+3. **Frontend not updating**
+   - Run CloudFront cache invalidation
+   - Check S3 bucket sync
+
+### Rollback
+```bash
+# View recent deployments
+ls -la logs/
+
+# Rollback using git
+git checkout <commit-hash> -- backend/
+./deploy-backend.sh
+```
+
+## License
+Proprietary - Seoul Economic Daily

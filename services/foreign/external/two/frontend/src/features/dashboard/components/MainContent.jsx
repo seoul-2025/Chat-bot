@@ -378,6 +378,7 @@ const MainContent = ({
                 onSendMessage={handleSendMessage}
                 onStartChat={onStartChat}
                 onTitlesGenerated={handleTitlesGenerated}
+                engineType={selectedEngine}
               />
             </div>
 

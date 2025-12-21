@@ -461,3 +461,38 @@ class WebSocketService:
                 formatted.append(f"AI: {content}")
 
         return "\n\n".join(formatted) if formatted else ""
+
+    @staticmethod
+    def clear_prompt_cache(engine_type: str = None):
+        """
+        프롬프트 캐시 초기화 (관리용)
+
+        Args:
+            engine_type: 특정 엔진 타입만 삭제. None이면 전체 삭제
+        """
+        global PROMPT_CACHE
+
+        if engine_type:
+            if engine_type in PROMPT_CACHE:
+                del PROMPT_CACHE[engine_type]
+                logger.info(f"🗑️ Cleared cache for {engine_type}")
+            else:
+                logger.info(f"No cache found for {engine_type}")
+        else:
+            cache_size = len(PROMPT_CACHE)
+            PROMPT_CACHE.clear()
+            logger.info(f"🗑️ Cleared all cache ({cache_size} entries)")
+
+    @staticmethod
+    def get_cache_stats() -> Dict[str, Any]:
+        """캐시 통계 정보 반환"""
+        global PROMPT_CACHE
+
+        stats = {
+            'total_entries': len(PROMPT_CACHE),
+            'engines': list(PROMPT_CACHE.keys()),
+            'cache_size_bytes': sum(len(str(data)) for data in PROMPT_CACHE.values()),
+            'permanent_cache': True  # 영구 캐시 사용 중
+        }
+
+        return stats

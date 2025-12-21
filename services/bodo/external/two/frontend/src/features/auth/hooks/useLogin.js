@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useLocation } from 'react-router-dom';
 import authService from '../services/authService';
-import { ADMIN_EMAIL, COMPANY_DOMAIN } from '../../../config';
+import { ADMIN_EMAIL } from '../../../config';
 
 export const useLogin = (propEngine) => {
   const location = useLocation();

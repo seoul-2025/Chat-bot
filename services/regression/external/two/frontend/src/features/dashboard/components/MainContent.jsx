@@ -13,7 +13,7 @@ import usageService from "../../chat/services/usageService";
 const MainContent = ({
   project,
   userRole,
-  selectedEngine = "C1",
+  selectedEngine = "11",
   onToggleStar,
   onStartChat,
   onLogout,

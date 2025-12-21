@@ -124,7 +124,8 @@ class AnthropicClient:
         headers = {
             "x-api-key": self.api_key,
             "anthropic-version": ANTHROPIC_API_VERSION,
-            "content-type": "application/json"
+            "content-type": "application/json",
+            "anthropic-beta": "prompt-caching-2024-07-31"  # 캐싱 베타 기능 활성화
         }
         
         # 프롬프트 캐싱 적용 (system만 캐싱)
@@ -306,10 +307,19 @@ class AnthropicClient:
                                         # 비용 계산 및 로깅
                                         cost = self._calculate_cost(self.last_usage)
                                         self.last_usage['total_cost'] = cost
-                                        
-                                        logger.info(f"📊 Token usage - input: {usage.get('input_tokens', 0)}, "
-                                                   f"output: {usage.get('output_tokens', 0)}, "
-                                                   f"cache_read: {cache_read}, cache_write: {cache_write}")
+
+                                        # 캐시 HIT/MISS 판정 및 로깅
+                                        if cache_read > 0:
+                                            logger.info(f"🎯 PROMPT CACHE HIT! cache_read: {cache_read} tokens")
+                                            # 비용 절감 계산 (캐시 읽기는 90% 할인)
+                                            savings = (cache_read / 1_000_000) * (PRICE_INPUT - PRICE_CACHE_READ)
+                                            logger.info(f"💵 Estimated savings from cache: ${savings:.6f}")
+                                        elif cache_write > 0:
+                                            logger.info(f"📝 PROMPT CACHE MISS - cache_write: {cache_write} tokens (next request will hit)")
+
+                                        logger.info(f"💰 Token Usage: input={usage.get('input_tokens', 0)}, "
+                                                   f"output={usage.get('output_tokens', 0)}, "
+                                                   f"cache_read={cache_read}, cache_write={cache_write}")
                                         logger.info(f"💰 API Cost: ${cost:.6f}")
                                 
                                 # 컨텐츠 델타
@@ -434,15 +444,22 @@ class AnthropicClient:
         return cost_input + cost_output + cost_cache_write + cost_cache_read
     
     def _create_dynamic_context(self) -> str:
-        """동적 컨텍스트 생성 (user_message에 추가용)"""
+        """동적 컨텍스트 생성 (user_message에 추가용) - 캐싱 최적화를 위해 여기에만 동적 정보 포함"""
         # 한국 시간 (UTC+9)
         kst = timezone(timedelta(hours=9))
-        current_time = datetime.now(kst).strftime('%Y-%m-%d %H:%M:%S KST')
-        session_id = str(uuid.uuid4())[:8]
-        
-        return f"""[현재 세션 정보]
-- 현재 시간: {current_time}
-- 세션 ID: {session_id}
+        current_time = datetime.now(kst)
+
+        return f"""[⚠️ 중요: 현재 세션 정보 - 반드시 참고하세요]
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+📅 현재 연도: {current_time.year}년
+📅 오늘 날짜: {current_time.strftime('%Y년 %m월 %d일')}
+🕐 현재 시간: {current_time.strftime('%Y-%m-%d %H:%M:%S KST')}
+📍 사용자 위치: 대한민국 (Asia/Seoul)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+⚠️ 중요: 응답에서 날짜나 연도를 언급할 때 반드시 위의 현재 날짜 정보를 사용하세요.
+2024년이라고 하지 마세요. 현재는 {current_time.year}년입니다.
+
 """
     
     def _replace_template_variables(self, prompt: str) -> str:

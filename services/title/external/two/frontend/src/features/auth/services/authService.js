@@ -222,7 +222,7 @@ class AuthService {
       localStorage.removeItem('ssoLogin');
 
       // SSO 쿠키 삭제 (cookieUtils 사용)
-      const { clearSSOCookies } = await import('../../shared/utils/cookieUtils');
+      const { clearSSOCookies } = await import('../../../shared/utils/cookieUtils');
       clearSSOCookies();
 
       console.log('로그아웃 성공');
@@ -245,7 +245,7 @@ class AuthService {
 
       // SSO 쿠키 삭제 (cookieUtils 사용)
       try {
-        const { clearSSOCookies } = await import('../../shared/utils/cookieUtils');
+        const { clearSSOCookies } = await import('../../../shared/utils/cookieUtils');
         clearSSOCookies();
       } catch (e) {
         console.error('쿠키 삭제 실패:', e);

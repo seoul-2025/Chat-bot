@@ -27,21 +27,45 @@ const Sidebar = forwardRef(({ selectedEngine = 'T5', isOpen = true, onToggle }, 
     return false;
   });
 
+  // 최신 selectedEngine을 항상 참조하기 위한 ref (경합 조건 방지)
+  const selectedEngineRef = React.useRef(selectedEngine);
+  selectedEngineRef.current = selectedEngine;
+
   // 대화 목록 불러오기
   useEffect(() => {
     loadConversations();
   }, [selectedEngine]);
-  
+
   // refreshSidebar 이벤트 리스너 추가
   useEffect(() => {
     const handleRefresh = () => {
-      console.log('🔄 사이드바 새로고침 이벤트 수신');
-      loadConversations();
+      console.log("=".repeat(50));
+      console.log("📥 [DEBUG] refreshSidebar 이벤트 수신됨!");
+      // URL에서 현재 엔진 타입 직접 확인 (경합 조건 방지)
+      const currentPath = window.location.pathname;
+      console.log("🔗 [DEBUG] 현재 URL 경로:", currentPath);
+      console.log("🔗 [DEBUG] selectedEngineRef.current:", selectedEngineRef.current);
+
+      let currentEngine = selectedEngineRef.current;
+      if (currentPath.includes('/11')) {
+        currentEngine = 'T5';
+        console.log("🔗 [DEBUG] URL에서 T5 엔진 감지");
+      } else if (currentPath.includes('/22')) {
+        currentEngine = 'C7';
+        console.log("🔗 [DEBUG] URL에서 C7 엔진 감지");
+      }
+      console.log("🎯 [DEBUG] 최종 엔진:", currentEngine);
+      console.log("=".repeat(50));
+      loadConversationsWithEngine(currentEngine);
     };
-    
+
+    console.log("📌 [DEBUG] refreshSidebar 이벤트 리스너 등록됨");
     window.addEventListener('refreshSidebar', handleRefresh);
-    return () => window.removeEventListener('refreshSidebar', handleRefresh);
-  }, [selectedEngine]);
+    return () => {
+      console.log("📌 [DEBUG] refreshSidebar 이벤트 리스너 해제됨");
+      window.removeEventListener('refreshSidebar', handleRefresh);
+    };
+  }, []); // 의존성 제거 - ref와 URL로 최신값 확인
 
   // 화면 크기 변경 감지
   useEffect(() => {
@@ -65,12 +89,17 @@ const Sidebar = forwardRef(({ selectedEngine = 'T5', isOpen = true, onToggle }, 
     return () => window.removeEventListener('resize', handleResize);
   }, [isOpen, onToggle, isMobile]);
 
-  const loadConversations = async () => {
+  // 특정 엔진으로 대화 목록 불러오기 (이벤트 핸들러용)
+  const loadConversationsWithEngine = async (engine) => {
+    console.log("=".repeat(50));
+    console.log(`🔄 [DEBUG] loadConversationsWithEngine 호출됨, 엔진: ${engine}`);
     try {
       setLoading(true);
-      const convs = await listConversations(selectedEngine);
-      
-      console.log(`📊 사이드바 대화 목록 (${selectedEngine}):`, {
+      console.log(`📡 [DEBUG] listConversations(${engine}) API 호출 시작...`);
+      const convs = await listConversations(engine);
+      console.log(`📡 [DEBUG] listConversations 응답 수신됨`);
+
+      console.log(`📊 [DEBUG] 사이드바 대화 목록 (${engine}):`, {
         totalCount: convs.length,
         first5: convs.slice(0, 5).map(c => ({
           id: c.conversationId,
@@ -79,16 +108,30 @@ const Sidebar = forwardRef(({ selectedEngine = 'T5', isOpen = true, onToggle }, 
           engineType: c.engineType
         }))
       });
-      
+
       setConversations(convs);
+      console.log(`✅ [DEBUG] setConversations 완료, ${convs.length}개 대화`);
+
+      // 방금 저장한 대화가 목록에 있는지 확인
+      console.log("📋 [DEBUG] 전체 대화 목록 ID들:", convs.map(c => c.conversationId));
+      console.log("📋 [DEBUG] 전체 대화 목록 상세:", JSON.stringify(convs.slice(0, 5), null, 2));
+
       // localStorage에서 즐겨찾기 불러오기
       const savedFavorites = JSON.parse(localStorage.getItem('favorites') || '[]');
       setFavorites(savedFavorites);
+      console.log("⭐ [DEBUG] 즐겨찾기 목록:", savedFavorites);
+      console.log("=".repeat(50));
     } catch (error) {
-      console.error('대화 목록 불러오기 실패:', error);
+      console.error('❌ [DEBUG] 대화 목록 불러오기 실패:', error);
+      console.error('❌ [DEBUG] 에러 상세:', error.message, error.stack);
     } finally {
       setLoading(false);
     }
+  };
+
+  // 현재 선택된 엔진으로 대화 목록 불러오기
+  const loadConversations = async () => {
+    await loadConversationsWithEngine(selectedEngine);
   };
 
   // ref로 노출할 메서드
@@ -129,13 +172,23 @@ const Sidebar = forwardRef(({ selectedEngine = 'T5', isOpen = true, onToggle }, 
     setDeleteModal({ open: false, conversationId: null, title: '' });
   };
 
-  const favoriteConversations = conversations.filter(conv => 
+  const favoriteConversations = conversations.filter(conv =>
     favorites.includes(conv.conversationId)
   );
 
-  const recentConversations = conversations.filter(conv => 
+  const recentConversations = conversations.filter(conv =>
     !favorites.includes(conv.conversationId)
   );
+
+  // 렌더링 시점에 상태 확인
+  console.log("🎨 [DEBUG] 렌더링 시점 상태:", {
+    conversationsCount: conversations.length,
+    favoritesCount: favoriteConversations.length,
+    recentCount: recentConversations.length,
+    loading: loading,
+    isOpen: isOpen,
+    selectedEngine: selectedEngine
+  });
 
   return (
     <>

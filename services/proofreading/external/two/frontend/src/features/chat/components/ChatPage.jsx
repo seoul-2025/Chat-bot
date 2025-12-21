@@ -16,8 +16,8 @@ import {
 import {
   getConversation,
 } from "../services/conversationService";
-import { updateLocalUsage, fetchUsageFromServer } from "../services/usageService";
-import * as usageService from "../services/usageService";
+import { updateLocalUsage, fetchUsageFromServer } from "../../../shared/services/usageService";
+import * as usageService from "../../../shared/services/usageService";
 import { useParams, useLocation } from "react-router-dom";
 // LoadingSpinner import 제거됨
 import StreamingAssistantMessage from "./StreamingAssistantMessage";

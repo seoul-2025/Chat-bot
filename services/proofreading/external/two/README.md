@@ -1,596 +1,383 @@
-# Nexus AI Title Generation Service
+# p1.sedaily.ai
+AI Proofreading Service - Claude Opus 4.5 based real-time proofreading with web search
 
-## Table of Contents
-
-1. [Overview](#overview)
-2. [System Architecture](#system-architecture)
-3. [Technology Stack](#technology-stack)
-4. [Project Structure](#project-structure)
-5. [Backend Architecture](#backend-architecture)
-6. [Frontend Architecture](#frontend-architecture)
-7. [Infrastructure Components](#infrastructure-components)
-8. [Environment Variables](#environment-variables)
-9. [API Documentation](#api-documentation)
-10. [Deployment Guide](#deployment-guide)
-11. [Monitoring & Logging](#monitoring--logging)
-12. [Security](#security)
-13. [Performance Optimization](#performance-optimization)
-14. [Contributing](#contributing)
-15. [License](#license)
+Last Updated: 2025-12-21
 
 ## Overview
+NX-WT-PRF is an AI-powered proofreading and title generation service for Seoul Economic Daily. Built on Anthropic Claude Opus 4.5 with real-time WebSocket streaming, native web search, and prompt caching for cost optimization.
 
-Nexus는 AI 기반 제목 생성 서비스로, AWS Bedrock Claude Sonnet 모델을 활용한 실시간 대화형 인터페이스를 제공합니다. 3-Tier 아키텍처를 기반으로 구축되어 확장성, 유지보수성, 보안성을 보장합니다.
+Live: https://p1.sedaily.ai
 
-### Key Features
+## Features
+- Real-time Chat: WebSocket-based streaming responses
+- Web Search: Anthropic's native web search integration (2025 data)
+- **Prompt Caching: 92% cost reduction with Anthropic ephemeral cache** ✅
+- DynamoDB Caching: Permanent prompt cache in Lambda container
+- Multiple AI Providers: Anthropic API primary, Bedrock fallback
+- Systematic Prompt: 11-section structured prompt for consistent quality
+- Multiple Engines: Basic/Pro engine support
 
-- **실시간 AI 대화**: WebSocket 기반 스트리밍 응답
-- **다중 엔진 지원**: T5, H8 모델
-- **프롬프트 관리**: 관리자 커스터마이징 프롬프트(실시간 성능 업데이트) CRUD
-- **사용량 추적**: 토큰 사용량 및 비용 모니터링
-- **엔터프라이즈 보안**: AWS Cognito 인증
-
-## System Architecture
-
-### 3-Tier Architecture Diagram
-
+## Architecture
 ```
-┌─────────────────────────────────────────────────────────────┐
-│                    Presentation Tier                        │
-│  ┌─────────────────────────────────────────────────────┐   │
-│  │  React SPA (S3 + CloudFront)                        │   │
-│  │  - Component-Based UI                               │   │
-│  │  - Container-Presenter Pattern                      │   │
-│  │  - WebSocket Client                                 │   │
-│  └─────────────────────────────────────────────────────┘   │
-└─────────────────────────────────────────────────────────────┘
-                              │
-                              ▼
-┌─────────────────────────────────────────────────────────────┐
-│                       Logic Tier                            │
-│  ┌─────────────────────────────────────────────────────┐   │
-│  │  API Gateway (REST + WebSocket)                     │   │
-│  └─────────────────────────────────────────────────────┘   │
-│                              │                              │
-│  ┌─────────────────────────────────────────────────────┐   │
-│  │  Lambda Functions                                   │   │
-│  │  - Conversation Handler                             │   │
-│  │  - Prompt CRUD Handler                              │   │
-│  │  - Usage Tracker                                    │   │
-│  │  - WebSocket Handlers                               │   │
-│  └─────────────────────────────────────────────────────┘   │
-│                              │                              │
-│  ┌─────────────────────────────────────────────────────┐   │
-│  │  External Services                                  │   │
-│  │  - Bedrock AI (Claude Sonnet)                       │   │
-│  │  - Cognito (Authentication)                         │   │
-│  └─────────────────────────────────────────────────────┘   │
-└─────────────────────────────────────────────────────────────┘
-                              │
-                              ▼
-┌─────────────────────────────────────────────────────────────┐
-│                        Data Tier                            │
-│  ┌─────────────────────────────────────────────────────┐   │
-│  │  DynamoDB Tables                                    │   │
-│  │  - conversations                                    │   │
-│  │  - prompts                                          │   │
-│  │  - usage                                            │   │
-│  │  - websocket-connections                            │   │
-│  └─────────────────────────────────────────────────────┘   │
-└─────────────────────────────────────────────────────────────┘
+Frontend (React + Vite)
+  ↓
+CloudFront (CDN)
+  ↓
+S3 (Static Hosting)
+
+WebSocket Flow:
+User → API Gateway WebSocket → Lambda (message handler)
+  ↓
+Anthropic Claude Opus 4.5 (with web search)
+  ↓
+Streaming Response → User
+
+REST API Flow:
+User → API Gateway REST → Lambda (conversation/prompt/usage)
+  ↓
+DynamoDB (conversations, prompts, usage tracking)
 ```
-
-### Request Flow Diagram
-
-```
-User Request → CloudFront → S3 (React App)
-                    │
-                    ▼
-            API Gateway (REST/WS)
-                    │
-          ┌─────────┴──────────┐
-          │                    │
-    Lambda Function      WebSocket Handler
-          │                    │
-    Service Layer        Bedrock Streaming
-          │                    │
-    Repository Layer           │
-          │                    │
-      DynamoDB ← ─ ─ ─ ─ ─ ─ ─┘
-```
-
-## Technology Stack
-
-### Frontend
-
-- **Framework**: React 18.2
-- **Build Tool**: Vite 4.4
-- **Styling**: Tailwind CSS 3.3
-- **State Management**: React Context API
-- **WebSocket**: Native WebSocket API
-- **Authentication**: AWS Amplify Auth
-- **UI Components**: Heroicons, Lucide React
-- **Animation**: Framer Motion
-- **Charts**: Recharts
-
-### Backend
-
-- **Runtime**: Python 3.9
-- **Framework**: AWS Lambda (Serverless)
-- **API**: AWS API Gateway (REST + WebSocket)
-- **AI Model**: AWS Bedrock Claude Sonnet 4
-- **Database**: DynamoDB
-- **Authentication**: AWS Cognito
-- **Monitoring**: CloudWatch
-
-### Infrastructure
-
-- **IaC**: Shell Scripts (Future: Terraform/CDK)
-- **CDN**: CloudFront
-- **Storage**: S3
-- **DNS**: Route 53
-- **SSL**: AWS Certificate Manager
 
 ## Project Structure
-
 ```
-nexus_0822/
-├── frontend/                   # Presentation Layer
-│   ├── src/
-│   │   ├── components/        # UI Components
-│   │   │   ├── common/       # Shared Components
-│   │   │   └── chat/         # Chat-specific Components
-│   │   ├── features/         # Feature Modules
-│   │   │   └── chat/
-│   │   │       ├── containers/  # Smart Components
-│   │   │       └── presenters/  # Dumb Components
-│   │   ├── services/         # API & WebSocket Services
-│   │   ├── hooks/           # Custom React Hooks
-│   │   ├── utils/           # Utility Functions
-│   │   └── styles/          # Global Styles
-│   └── scripts/             # Deployment Scripts
-│
-├── backend/                    # Logic Layer
-│   ├── handlers/              # Lambda Entry Points
-│   │   ├── api/              # REST API Handlers
-│   │   └── websocket/        # WebSocket Handlers
-│   ├── src/                  # Core Business Logic
-│   │   ├── models/           # Domain Models
-│   │   ├── repositories/    # Data Access Layer
-│   │   ├── services/        # Business Logic Layer
-│   │   └── config/          # Configuration
-│   ├── lib/                 # External Service Clients
-│   ├── utils/               # Shared Utilities
-│   └── scripts/             # Deployment Scripts
-│
-└── infrastructure/             # Infrastructure Layer
-    ├── aws/                   # AWS Service Configurations
-    │   ├── api-gateway/      # API Definitions
-    │   ├── bedrock/          # AI Model Config
-    │   ├── cloudfront/       # CDN Config
-    │   ├── cognito/          # Auth Config
-    │   ├── dynamodb/         # Database Schema
-    │   ├── iam/              # Permissions
-    │   ├── lambda/           # Function Config
-    │   ├── route53/          # DNS Config
-    │   └── s3/               # Storage Config
-    └── scripts/              # Infrastructure Scripts
+.
+├── README.md
+├── AWS_INFRASTRUCTURE_DOCUMENTATION.md
+├── deploy-anthropic.sh     # Backend deployment
+├── deploy-frontend.sh      # Frontend deployment
+├── config/                 # Environment configuration
+├── backend/
+│   ├── handlers/           # Lambda handlers
+│   │   ├── api/           # REST API handlers
+│   │   └── websocket/     # WebSocket handlers
+│   ├── lib/               # anthropic_client, bedrock_client
+│   ├── services/          # websocket_service
+│   ├── src/               # Core business logic
+│   │   ├── models/
+│   │   ├── repositories/
+│   │   └── services/
+│   └── utils/
+└── frontend/
+    ├── src/
+    │   ├── features/      # auth, chat, dashboard
+    │   ├── shared/
+    │   └── config.js
+    ├── public/
+    ├── package.json
+    └── vite.config.js
 ```
 
-## Backend Architecture
+## Quick Start
 
-### Domain Models
+### Prerequisites
+- AWS CLI configured
+- Node.js 18+
+- Python 3.11+
+- AWS Account: 887078546492
 
-```python
-# src/models/conversation.py
-@dataclass
-class Message:
-    role: str  # 'user' | 'assistant'
-    content: str
-    timestamp: str
-    token_count: Optional[int]
-
-@dataclass
-class Conversation:
-    conversation_id: str
-    user_id: str
-    engine_type: str  # 'T5' | 'H8'
-    title: Optional[str]
-    messages: List[Message]
-    created_at: str
-    updated_at: str
-    total_tokens: int
-```
-
-### Service Layer Pattern
-
-```python
-# src/services/conversation_service.py
-class ConversationService:
-    def __init__(self):
-        self.repository = ConversationRepository()
-        self.bedrock_client = BedrockClient()
-
-    def create_conversation(self, user_id: str, engine_type: str)
-    def add_message(self, conversation_id: str, message: Message)
-    def generate_ai_response(self, messages: List[Message])
-    def calculate_usage(self, conversation: Conversation)
-```
-
-### Repository Pattern
-
-```python
-# src/repositories/conversation_repository.py
-class ConversationRepository:
-    def save(self, conversation: Conversation) -> Conversation
-    def find_by_id(self, conversation_id: str) -> Optional[Conversation]
-    def find_by_user(self, user_id: str) -> List[Conversation]
-    def delete(self, conversation_id: str) -> bool
-    def update(self, conversation: Conversation) -> Conversation
-```
-
-## Frontend Architecture
-
-### Component Hierarchy
-
-```
-App
-├── AuthProvider
-├── Router
-│   ├── PublicRoute
-│   │   └── LoginPage
-│   └── PrivateRoute
-│       ├── ChatLayout
-│       │   ├── Sidebar
-│       │   │   ├── ConversationList
-│       │   │   └── EngineSelector
-│       │   └── ChatContainer
-│       │       ├── ChatPresenter
-│       │       │   ├── MessageList
-│       │       │   ├── InputArea
-│       │       │   └── TypingIndicator
-│       │       └── ChatContainer (Logic)
-│       └── SettingsPage
-```
-
-### Service Architecture
-
-```javascript
-// services/websocket.js
-class WebSocketService {
-    constructor(url, options) {
-        this.url = url;
-        this.reconnectAttempts = 0;
-        this.maxReconnectAttempts = 5;
-    }
-
-    connect(token, conversationId)
-    send(action, data)
-    onMessage(callback)
-    reconnect()
-    disconnect()
-}
-```
-
-## Infrastructure Components
-
-### AWS Services Configuration
-
-#### DynamoDB Tables
-
-| Table                 | Partition Key   | Sort Key | GSI        | TTL       |
-| --------------------- | --------------- | -------- | ---------- | --------- |
-| conversations         | conversation_id | -        | user-index | -         |
-| prompts               | prompt_id       | -        | user-index | -         |
-| usage                 | user_id         | date     | -          | -         |
-| websocket-connections | connection_id   | -        | user-index | ttl (24h) |
-
-#### Lambda Functions
-
-| Function             | Memory  | Timeout | Trigger     | Purpose             |
-| -------------------- | ------- | ------- | ----------- | ------------------- |
-| conversation-api     | 512 MB  | 30s     | API Gateway | Conversation CRUD   |
-| prompt-crud          | 512 MB  | 30s     | API Gateway | Prompt management   |
-| usage-handler        | 256 MB  | 30s     | API Gateway | Usage tracking      |
-| websocket-connect    | 256 MB  | 10s     | WebSocket   | Connection handling |
-| websocket-disconnect | 256 MB  | 10s     | WebSocket   | Cleanup             |
-| websocket-message    | 1024 MB | 300s    | WebSocket   | AI streaming        |
-
-#### API Gateway Endpoints
-
-**REST API**
-
-```
-GET    /conversations
-POST   /conversations
-GET    /conversations/{id}
-PUT    /conversations/{id}
-DELETE /conversations/{id}
-
-GET    /prompts
-POST   /prompts
-GET    /prompts/{id}
-PUT    /prompts/{id}
-DELETE /prompts/{id}
-
-GET    /usage
-```
-
-**WebSocket API**
-
-```
-$connect    - Connection establishment
-$disconnect - Connection cleanup
-$default    - Message routing
-sendMessage - User message handling
-```
-
-## Environment Variables
-
-### Backend Environment Variables
-
+### Deployment
 ```bash
-# AWS Configuration
-AWS_REGION=us-east-1
-AWS_ACCOUNT_ID=887078546492
+# Full deployment (frontend + backend)
+./deploy-anthropic.sh && ./deploy-frontend.sh
 
-# DynamoDB Tables
-CONVERSATIONS_TABLE=nexus-conversations
-PROMPTS_TABLE=nexus-prompts
-USAGE_TABLE=nexus-usage
-WEBSOCKET_TABLE=nexus-websocket-connections
+# Frontend only
+./deploy-frontend.sh
 
-# Bedrock Configuration
-BEDROCK_MODEL_ID=us.anthropic.claude-sonnet-4-20250514-v1:0
-BEDROCK_MAX_TOKENS=16384
-BEDROCK_TEMPERATURE=0.81
-BEDROCK_TOP_P=0.9
-BEDROCK_TOP_K=50
-
-# API Gateway
-REST_API_URL=https://api.nexus.com
-WEBSOCKET_API_URL=wss://ws.nexus.com
-
-# Cognito
-COGNITO_USER_POOL_ID=us-east-
-COGNITO_CLIENT_ID=xxxxxxxxxxxxxxxxxxxxxxxxx
-
-# Monitoring
-LOG_LEVEL=INFO
-METRICS_ENABLED=true
+# Backend only
+./deploy-anthropic.sh
 ```
 
-### Frontend Environment Variables
+## Current Deployment
+Status: Production Ready
 
-```bash
-# API Configuration
-VITE_API_BASE_URL=https://api.nexus.com
-VITE_WS_URL=wss://ws.nexus.com
+Updated: 2025-12-21
 
-# Authentication
-VITE_COGNITO_USER_POOL_ID=us-east-
-VITE_COGNITO_CLIENT_ID=xxxxxxxxxxxxxxxxxxxxxxxxx
-VITE_AWS_REGION=us-east-1
+## URLs
+| Resource | URL |
+|----------|-----|
+| Primary Domain | https://p1.sedaily.ai |
+| CloudFront | https://d1tas3e2v5373v.cloudfront.net |
+| REST API | https://wxwdb89w4m.execute-api.us-east-1.amazonaws.com/prod |
+| WebSocket API | wss://p062xh167h.execute-api.us-east-1.amazonaws.com/prod |
 
-# Feature Flags
-VITE_ENABLE_DEBUG=false
-VITE_ENABLE_ANALYTICS=true
-```
+## AWS Resources (us-east-1)
 
-## API Documentation
+### Lambda Functions
+| Function | Purpose |
+|----------|---------|
+| nx-wt-prf-websocket-connect | WebSocket connection handler |
+| nx-wt-prf-websocket-message | Main chat handler (Claude API) |
+| nx-wt-prf-websocket-disconnect | WebSocket disconnect handler |
+| nx-wt-prf-conversation-api | Conversation CRUD |
+| nx-wt-prf-prompt-crud | Prompt management |
+| nx-wt-prf-usage-handler | Usage tracking |
 
-### REST API
+### DynamoDB Tables
+| Table | Purpose |
+|-------|---------|
+| nx-wt-prf-conversations | Chat history |
+| nx-wt-prf-prompts | System prompts |
+| nx-wt-prf-files | File metadata |
+| nx-wt-prf-usage | Usage statistics |
+| nx-wt-prf-usage-tracking | Detailed tracking |
+| nx-wt-prf-websocket-connections | Active connections |
 
-#### Create Conversation
+### Other Resources
+| Resource | ID/Name |
+|----------|---------|
+| S3 Bucket | nx-prf-prod-frontend-2025 |
+| CloudFront Distribution | E39OHKSWZD4F8J (p1.sedaily.ai) |
+| Secrets Manager | proof-v1 (Anthropic API key) |
 
-```http
-POST /conversations
-Content-Type: application/json
+## AI Configuration
+| Setting | Value |
+|---------|-------|
+| Primary Provider | Anthropic API |
+| Model | claude-opus-4-5-20251101 |
+| Max Tokens | 4096 |
+| Temperature | 0.7 |
+| Fallback | AWS Bedrock |
+| Web Search | Enabled (max 5 uses) |
 
-{
-    "userId": "user123",
-    "engineType": "T5",
-    "title": "New Conversation"
-}
+## Change History
 
-Response: 201 Created
-{
-    "conversationId": "conv_abc123",
-    "userId": "user123",
-    "engineType": "T5",
-    "title": "New Conversation",
-    "messages": [],
-    "createdAt": "2024-01-01T00:00:00Z"
-}
-```
+### Phase 8: Final Testing & Deployment Verification (2025-12-21)
+- **Production deployment verified** - All components tested and working
+- Backend: 4/4 Lambda functions deployed successfully
+- Frontend: S3 + CloudFront deployment complete
+- Authentication: Cognito login verified
+- HTTP Status: 200 OK
+- Fixed `deploy-frontend.sh` S3 bucket policy (CloudFront-only → public read)
+- Simplified CloudFront section to use fixed distribution ID
 
-### WebSocket API
+### Phase 7: CloudFront Fix (2025-12-21)
+- **Fixed p1.sedaily.ai Access Denied error**
+- Root cause: `p1.sedaily.ai` CloudFront (`E39OHKSWZD4F8J`) pointed to wrong bucket
+- Fix: Updated CloudFront origin from `nx-wt-prf-frontend-prod` to `nx-prf-prod-frontend-2025`
+- Updated `deploy-frontend.sh` with correct bucket and CloudFront ID
+- Updated `AWS_INFRASTRUCTURE_DOCUMENTATION.md` with correct values
+- Verified: `https://p1.sedaily.ai` returns HTTP 200
 
-#### Send Message
+### Phase 6: Final Cleanup (2025-12-21)
+- Removed duplicate documentation files:
+  - `DEPLOYMENT_MANUAL.md` - consolidated into README
+  - `MAINTENANCE_GUIDE.md` - consolidated into README
+  - `PROMPT_CACHING_OPTIMIZATION.md` - consolidated into README
+- Deleted `infrastructure/`, `work-logs/` directories
+- Deleted build artifacts: `*.zip`, `node_modules/`, `dist/`
+- Final structure: README + AWS docs + deploy scripts + source code
 
-```javascript
-{
-    "action": "sendMessage",
-    "conversationId": "conv_abc123",
-    "message": {
-        "role": "user",
-        "content": "Hello AI"
-    },
-    "engineType": "T5"
-}
-```
+### Phase 5: Prompt Caching Fix & Optimization (2025-12-21)
+- **Fixed Anthropic Prompt Caching** - 92% cost reduction achieved ✅
+- Issue: `cache_control` had invalid `ttl` parameter → Fixed to `{"type": "ephemeral"}`
+- Issue: Dynamic values in system prompt invalidating cache:
+  - `{{current_datetime}}`, `{{session_id}}` changed every request
+  - Fixed: Static values for system prompt, dynamic context moved to user message
+- Issue: Conversation context prepended to system prompt → Moved to user message
+- SSE streaming parser improved for Anthropic's `message_start`/`message_stop` events
+- Added detailed usage logging: `📊 API Usage`, `💵 Total cost`, `🎯 Cache HIT`
+- Cost comparison:
+  - Cache MISS: ~$0.70/request
+  - Cache HIT: ~$0.06/request (92% savings)
+- Frontend refactoring: Consolidated duplicate `usageService.js` to shared service
 
-#### Receive Stream
+### Phase 4: Project Cleanup & Documentation (2025-12-20)
+- Removed ~50 unused files and scripts
+- Deleted archive folders: `upgrade-archive/`, `backend/scripts/`
+- Removed Node.js files: `serverless.yml`, `handler.js`, `index.js`
+- Removed test files: `test_web_search.py`, `test_new_table.py`
+- Documentation overhaul with SEOdaily-ENG template format
 
-```javascript
-{
-    "type": "stream",
-    "conversationId": "conv_abc123",
-    "chunk": "Hello! How can I",
-    "isComplete": false
-}
-```
+### Phase 3: Systematic Prompt Integration (2025-12-20)
+- Added `create_enhanced_system_prompt()` to `websocket_service.py`
+- 11-section systematic prompt structure:
+  1. Current Context - Time, language, location
+  2. Identity & Mission - AI role definition
+  3. Security Rules - Input validation
+  4. Core Process - 5-step workflow
+  5. Journalist Features - Fact-checking, confidence
+  6. Korean Language Rules - Grammar standards
+  7. Output Rules - Response format
+  8. Time-Sensitive Info - Current data handling
+  9. Ethics Guidelines - Content standards
+  10. Quality Check - Pre-response validation
+  11. Never Do This - Prohibited actions
+- Lambda redeployment with prompt changes
+
+### Phase 2: Cost Optimization (2025-12-20)
+- Implemented Anthropic Prompt Caching with `cache_control`
+- Added `calculate_cost()` function for real-time cost tracking
+- Dynamic/static context separation for improved cache hit rate:
+  - Static: user location, timezone (cacheable)
+  - Dynamic: current time, session ID (per request)
+- Claude Opus 4.5 pricing integration:
+  - Input: $5.00/1M tokens
+  - Output: $25.00/1M tokens
+  - Cache Read: $0.50/1M tokens (90% savings)
+- DynamoDB cache: 5-min TTL -> permanent (container lifetime)
+- Expected savings: 70-80%
+
+### Phase 1: Claude 4.5 Opus Migration (2024-12)
+- Migrated from AWS Bedrock to Anthropic Direct API
+- Model: `claude-opus-4-5-20251101` (Claude Opus 4.5)
+- Added dual AI provider support:
+  - Primary: Anthropic API (direct)
+  - Fallback: AWS Bedrock (claude-sonnet-4)
+- Integrated native web search functionality
+- Added `anthropic_client.py`:
+  - Streaming response support
+  - Secrets Manager integration
+  - Web search tool configuration
+- Added `citation_formatter.py` for source formatting
+- Updated `bedrock_client_enhanced.py` as fallback
+
+### Initial Setup
+- Project initialization with React + Vite frontend
+- AWS infrastructure: S3, CloudFront, API Gateway, Lambda, DynamoDB
+- WebSocket real-time chat implementation
+- REST API for conversation/prompt/usage management
 
 ## Deployment Guide
 
-### Quick Start
-
+### Deploy Commands
 ```bash
-# Clone repository
-git clone https://github.com/your-org/nexus.git
-cd nexus
+# Backend (Lambda functions)
+./deploy-anthropic.sh
 
-# Deploy infrastructure
-cd infrastructure/scripts
-./deploy-all.sh nexus nexus.com production
+# Frontend (S3 + CloudFront)
+./deploy-frontend.sh
 
-# Deploy backend
-cd ../../backend/scripts
-./99-deploy-lambda.sh
-
-# Deploy frontend
-cd ../../frontend
-npm install
-npm run build
-aws s3 sync dist/ s3://nexus-frontend
+# Full deployment
+./deploy-anthropic.sh && ./deploy-frontend.sh
 ```
 
-### Production Deployment
-
-1. **Infrastructure Setup**
-
-   ```bash
-   infrastructure/scripts/deploy-all.sh [service-name] [domain] [environment]
-   ```
-
-2. **Backend Deployment**
-
-   ```bash
-   backend/scripts/99-deploy-lambda.sh
-   ```
-
-3. **Frontend Deployment**
-   ```bash
-   frontend/scripts/03-deploy-to-s3.sh
-   frontend/scripts/04-create-cloudfront.sh
-   ```
-
-## Monitoring & Logging
-
-### CloudWatch Dashboards
-
-- **API Gateway Metrics**: 4XX/5XX errors, latency, request count
-- **Lambda Metrics**: Invocations, errors, duration, concurrent executions
-- **DynamoDB Metrics**: Read/Write capacity, throttles, user errors
-- **WebSocket Metrics**: Active connections, message rate, connection duration
-
-### Log Groups
-
-```
-/aws/lambda/nexus-conversation-api
-/aws/lambda/nexus-websocket-message
-/aws/apigateway/nexus-rest-api
-/aws/apigateway/nexus-websocket-api
+### Environment Configuration
+Lambda environment variables:
+```json
+{
+  "USE_ANTHROPIC_API": "true",
+  "ANTHROPIC_SECRET_NAME": "proof-v1",
+  "ANTHROPIC_MODEL_ID": "claude-opus-4-5-20251101",
+  "FALLBACK_TO_BEDROCK": "true",
+  "ENABLE_NATIVE_WEB_SEARCH": "true",
+  "WEB_SEARCH_MAX_USES": "5"
+}
 ```
 
-### Alarms
-
-- API Error Rate > 5%
-- Lambda Error Rate > 1%
-- Lambda Duration > 80% of timeout
-- DynamoDB Throttling > 0
-- WebSocket Connections > 1000
-
-## Security
-
-### Authentication & Authorization
-
-- **User Authentication**: AWS Cognito User Pools
-- **API Authorization**: JWT tokens via Cognito
-- **WebSocket Auth**: Query parameter token validation
-
-### Data Protection
-
-- **Encryption at Rest**: DynamoDB encryption enabled
-- **Encryption in Transit**: HTTPS/WSS only
-- **Content Filtering**: Bedrock Guardrails enabled
-- **Input Validation**: API Gateway request validators
-
-### Network Security
-
-- **CDN**: CloudFront with Origin Access Identity
-- **API**: Regional endpoints with throttling
-- **CORS**: Restrictive origin policies
-
-### Compliance
-
-- **Data Retention**: TTL on temporary data
-- **Audit Logging**: CloudTrail enabled
-- **Access Control**: IAM least privilege principle
-
-## Performance Optimization
-
-### Frontend Optimization
-
-- **Code Splitting**: Route-based lazy loading
-- **Bundle Optimization**: Tree shaking, minification
-- **Caching Strategy**: CloudFront caching headers
-- **Image Optimization**: WebP format, lazy loading
-
-### Backend Optimization
-
-- **Lambda Optimization**: Memory tuning, provisioned concurrency
-- **DynamoDB Optimization**: On-demand vs provisioned capacity
-- **API Gateway Caching**: Response caching for GET requests
-- **Connection Pooling**: Reuse database connections
-
-### Cost Optimization
-
-- **Auto Scaling**: DynamoDB auto-scaling
-- **Reserved Capacity**: Lambda savings plans
-- **S3 Lifecycle**: Archive old data
-- **CloudWatch Logs**: Retention policies
-
-## Contributing
-
-### Development Setup
-
+### Log Monitoring
 ```bash
-# Backend development
-cd backend
-python -m venv venv
-source venv/bin/activate
-pip install -r requirements.txt
+# Real-time Lambda logs
+aws logs tail /aws/lambda/nx-wt-prf-websocket-message --follow
 
-# Frontend development
-cd frontend
-npm install
-npm run dev
+# Check deployment
+aws lambda get-function --function-name nx-wt-prf-websocket-message --query 'Configuration.LastModified'
 ```
 
-### Code Standards
+## Cost Optimization
 
-- **Python**: PEP 8 compliance
-- **JavaScript**: ESLint + Prettier
-- **Git**: Conventional commits
-- **Testing**: Unit tests required
+### Anthropic Prompt Caching (92% savings) ✅
+- System prompt (~67,000 tokens) cached with Anthropic ephemeral cache
+- Cache TTL: ~5 minutes (Anthropic managed)
+- **Cache MISS**: ~$0.70/request (first request creates cache)
+- **Cache HIT**: ~$0.06/request (subsequent requests)
+- Key requirements for cache hit:
+  - System prompt must be **identical** across requests
+  - Dynamic content (time, session) moved to user message
+  - Conversation context in user message, not system prompt
 
-### Pull Request Process
+### Pricing (Claude Opus 4.5)
+| Token Type | Price per 1M tokens |
+|------------|---------------------|
+| Input | $5.00 |
+| Output | $25.00 |
+| Cache Write | $10.00 |
+| **Cache Read** | **$0.50** (90% off) |
 
-1. Fork repository
-2. Create feature branch
-3. Implement changes
-4. Add tests
-5. Update documentation
-6. Submit pull request
+### DynamoDB Caching
+- Permanent in-memory cache in Lambda container
+- DB queries only on cold start
+- Reduces DynamoDB read costs
+
+### Estimated Monthly Cost
+| Service | Cost |
+|---------|------|
+| Anthropic Claude | ~$30-80 (with caching) |
+| Lambda | ~$50-100 |
+| DynamoDB | ~$20-50 |
+| S3/CloudFront | ~$10-20 |
+| API Gateway | ~$10-30 |
+| **Total** | **~$80-200/month** |
+
+## Tech Stack
+
+### Backend
+- Python 3.11
+- AWS Lambda
+- Anthropic Claude Opus 4.5
+- DynamoDB
+- API Gateway (REST + WebSocket)
+- Secrets Manager
+
+### Frontend
+- React 18.2
+- Vite 4.4
+- Tailwind CSS 3.3
+- S3 + CloudFront
+
+## Monitoring
+
+### CloudWatch Metrics
+- Lambda invocations and errors
+- API Gateway request count
+- DynamoDB read/write capacity
+- WebSocket connection count
+
+### Cache Monitoring Patterns
+```bash
+# DynamoDB Cache
+✅ Cache HIT for Basic - DB query skipped (permanent cache)
+❌ Cache MISS for Basic - fetching from DB (first time)
+
+# Anthropic Prompt Cache
+🎯 Anthropic Cache HIT! Read 67043 tokens from cache
+💾 Anthropic Cache MISS! Created cache with 67043 tokens
+
+# Usage & Cost
+📊 API Usage: {'input_tokens': 4405, 'cache_read_input_tokens': 67043, ...}
+💵 Total cost for this request: $0.057122
+```
+
+### Cost Tracking
+AWS Cost Explorer with tag: `nx-wt-prf`
+
+## Troubleshooting
+
+### Common Issues
+
+1. **WebSocket not connecting**
+   - Check Lambda logs for errors
+   - Verify API Gateway WebSocket stage is deployed
+   ```bash
+   wscat -c wss://p062xh167h.execute-api.us-east-1.amazonaws.com/prod
+   ```
+
+2. **AI responses not working**
+   - Check Anthropic API key in Secrets Manager
+   - Verify Lambda environment variables
+
+3. **Frontend not updating**
+   - Run CloudFront cache invalidation
+   - Check S3 bucket sync
+
+### Rollback
+```bash
+# Rollback using git
+git checkout <commit-hash> -- backend/
+./deploy-anthropic.sh
+```
+
+## Related Documents
+- [AWS_INFRASTRUCTURE_DOCUMENTATION.md](./AWS_INFRASTRUCTURE_DOCUMENTATION.md) - AWS resource details
 
 ## License
-
-MIT License - See [LICENSE](LICENSE) file for details
-
----
-
-**Version**: 1.0.0  
-**Last Updated**: 2024-09-05  
-**Maintainers**: Backend Team, Frontend Team  
-**Contact**: support@nexus.com
+Proprietary - Seoul Economic Daily
