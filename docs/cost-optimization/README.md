@@ -1,6 +1,6 @@
 # Anthropic Prompt Caching - Cost Optimization Report
 
-Last Updated: 2025-12-22 01:00 KST
+Last Updated: 2025-12-22 01:30 KST
 
 ## Executive Summary
 
@@ -147,6 +147,17 @@ aws logs tail /aws/lambda/f1-websocket-message-two --region us-east-1 --follow |
 ---
 
 ## Test History
+
+### 2025-12-22 (Latest)
+
+| Service | Time (KST) | Result | Cache Tokens | Note |
+|---------|------------|--------|--------------|------|
+| b1 | 00:00 | 2/2 HIT | 19,343 | 100% HIT |
+| p1 | 00:00 | 1/4 HIT | 65,153-70,416 | Multiple engine types |
+| r1 | 00:00 | 1/2 HIT | 7,232-9,393 | Cold start MISS |
+| w1 | 00:00 | 1/2 HIT | 19,476-27,925 | Engine type change |
+| t1 | 00:00 | 4/4 HIT | 54,442-74,615 | 100% HIT |
+| f1 | 00:00 | 2/3 HIT | 63,409-64,563 | Cold start MISS |
 
 ### 2025-12-21
 

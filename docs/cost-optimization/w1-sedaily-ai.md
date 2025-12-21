@@ -1,6 +1,6 @@
 # w1.sedaily.ai - Prompt Caching Cost Optimization
 
-Last Updated: 2025-12-21 20:15 KST
+Last Updated: 2025-12-22 01:30 KST
 
 ## Overview
 
@@ -36,6 +36,15 @@ Last Updated: 2025-12-21 20:15 KST
 ---
 
 ## Test History
+
+### 2025-12-22 00:00 KST (Latest)
+
+| # | Time (UTC) | Cache | Input | Output | Cache Read | Cache Write | Cost |
+|---|------------|-------|-------|--------|------------|-------------|------|
+| 1 | 14:49:34 | HIT | 3,229 | 1 | 19,476 | 0 | $0.0259 |
+| 2 | 14:59:11 | MISS | 588 | 1 | 0 | 27,925 | $0.2822 |
+
+**Result**: 1/2 Cache HIT (50%) - MISS due to engine type change
 
 ### 2025-12-21 20:14 KST
 
