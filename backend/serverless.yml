@@ -1,0 +1,39 @@
+service: one-backend
+
+provider:
+  name: aws
+  runtime: python3.9
+  region: us-east-1
+  environment:
+    GOOGLE_SEARCH_API_KEY: ${env:GOOGLE_SEARCH_API_KEY}
+    GOOGLE_SEARCH_ENGINE_ID: ${env:GOOGLE_SEARCH_ENGINE_ID}
+    CLAUDE_API_KEY: ${env:CLAUDE_API_KEY}
+
+functions:
+  websocket-message:
+    handler: handlers.websocket.message.handler
+    events:
+      - websocket:
+          route: message
+    environment:
+      GOOGLE_SEARCH_API_KEY: ${env:GOOGLE_SEARCH_API_KEY}
+      GOOGLE_SEARCH_ENGINE_ID: ${env:GOOGLE_SEARCH_ENGINE_ID}
+  
+  usage:
+    handler: handlers.api.usage_handler.lambda_handler
+    events:
+      - http:
+          path: usage/anonymous/{userId}
+          method: get
+          cors: true
+      - http:
+          path: usage/anonymous/{userId}
+          method: options
+          cors: true
+
+plugins:
+  - serverless-python-requirements
+
+custom:
+  pythonRequirements:
+    dockerizePip: true

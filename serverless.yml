@@ -1,0 +1,128 @@
+service: one-service
+
+provider:
+  name: aws
+  runtime: python3.9
+  region: us-east-1
+  stage: prod
+  environment:
+    CLAUDE_API_KEY: ${env:CLAUDE_API_KEY}
+
+functions:
+  # WebSocket Functions
+  websocket-connect:
+    handler: backend/handlers/websocket/connect_handler.lambda_handler
+    events:
+      - websocket:
+          route: $connect
+
+  websocket-disconnect:
+    handler: backend/handlers/websocket/disconnect_handler.lambda_handler
+    events:
+      - websocket:
+          route: $disconnect
+
+  websocket-message:
+    handler: backend/handlers/websocket/message_handler.lambda_handler
+    events:
+      - websocket:
+          route: message
+
+  # REST API Functions
+  conversation-api:
+    handler: backend/handlers/api/conversation_handler.lambda_handler
+    events:
+      - http:
+          path: /conversations
+          method: get
+          cors: true
+      - http:
+          path: /conversations
+          method: post
+          cors: true
+      - http:
+          path: /conversations/{id}
+          method: get
+          cors: true
+      - http:
+          path: /conversations/{id}
+          method: patch
+          cors: true
+      - http:
+          path: /conversations/{id}
+          method: delete
+          cors: true
+
+  usage-handler:
+    handler: backend/handlers/api/usage_handler.lambda_handler
+    events:
+      - http:
+          path: /usage/{user_id}/{conversation_id}
+          method: get
+          cors: true
+
+resources:
+  Resources:
+    # DynamoDB Tables
+    ConversationsTable:
+      Type: AWS::DynamoDB::Table
+      Properties:
+        TableName: one-conversations
+        AttributeDefinitions:
+          - AttributeName: conversation_id
+            AttributeType: S
+        KeySchema:
+          - AttributeName: conversation_id
+            KeyType: HASH
+        BillingMode: PAY_PER_REQUEST
+
+    MessagesTable:
+      Type: AWS::DynamoDB::Table
+      Properties:
+        TableName: one-messages
+        AttributeDefinitions:
+          - AttributeName: conversation_id
+            AttributeType: S
+          - AttributeName: message_id
+            AttributeType: S
+        KeySchema:
+          - AttributeName: conversation_id
+            KeyType: HASH
+          - AttributeName: message_id
+            KeyType: RANGE
+        BillingMode: PAY_PER_REQUEST
+
+    ConnectionsTable:
+      Type: AWS::DynamoDB::Table
+      Properties:
+        TableName: one-connections
+        AttributeDefinitions:
+          - AttributeName: connection_id
+            AttributeType: S
+        KeySchema:
+          - AttributeName: connection_id
+            KeyType: HASH
+        BillingMode: PAY_PER_REQUEST
+
+    UsageTable:
+      Type: AWS::DynamoDB::Table
+      Properties:
+        TableName: one-usage
+        AttributeDefinitions:
+          - AttributeName: user_id
+            AttributeType: S
+          - AttributeName: conversation_id
+            AttributeType: S
+        KeySchema:
+          - AttributeName: user_id
+            KeyType: HASH
+          - AttributeName: conversation_id
+            KeyType: RANGE
+        BillingMode: PAY_PER_REQUEST
+
+plugins:
+  - serverless-python-requirements
+
+custom:
+  pythonRequirements:
+    dockerizePip: false
