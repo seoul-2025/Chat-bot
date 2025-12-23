@@ -8,7 +8,7 @@ const PORT = 3001;
 
 // CORS 설정
 app.use(cors({
-  origin: 'http://localhost:5173',
+  origin: 'http://localhost:3002',
   credentials: true
 }));
 

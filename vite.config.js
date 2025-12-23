@@ -31,7 +31,11 @@ export default defineConfig({
     // 청크 크기 경고 제한 증가
     chunkSizeWarningLimit: 1000,
   },
-  // 프리뷰 서버에서도 라우팅 지원
+  // 개발 및 프리뷰 서버에서 라우팅 지원
+  server: {
+    port: 3002,
+    historyApiFallback: true,
+  },
   preview: {
     port: 3000,
     historyApiFallback: true,
