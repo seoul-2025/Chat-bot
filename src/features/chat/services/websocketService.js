@@ -200,13 +200,11 @@ class WebSocketService {
     idempotencyKey = null
   ) {
     return new Promise((resolve, reject) => {
-      // 개발 환경에서는 모의 응답 생성
-      if (import.meta.env.DEV) {
-        console.log("🔧 개발 모드: 모의 AI 응답 생성");
-        this.simulateAIResponse(message, engineType);
-        resolve();
-        return;
-      }
+      // 모든 환경에서 모의 응답 사용 (REST API 모드)
+      console.log("🔧 REST API 모드: 모의 AI 응답 생성");
+      this.simulateAIResponse(message, engineType);
+      resolve();
+      return;
 
       if (!this.isWebSocketConnected()) {
         console.error("WebSocket이 연결되지 않았습니다.");

@@ -75,7 +75,35 @@ upload_chat() {
     log_info "Chat files uploaded ✅"
 }
 
-# Step 4: Create CloudFront for chat
+# Step 4: Invalidate chat CloudFront cache
+invalidate_chat_cloudfront() {
+    log_info "Invalidating chat CloudFront cache..."
+    
+    # Chat CloudFront Distribution ID
+    CHAT_CLOUDFRONT_DISTRIBUTION_ID="${CHAT_CLOUDFRONT_DISTRIBUTION_ID:-}"
+    
+    if [ -z "$CHAT_CLOUDFRONT_DISTRIBUTION_ID" ]; then
+        log_warning "CHAT_CLOUDFRONT_DISTRIBUTION_ID not set in config.sh"
+        log_info "Skipping chat CloudFront invalidation"
+        return 0
+    fi
+    
+    # Create invalidation for all files
+    INVALIDATION_ID=$(aws cloudfront create-invalidation \
+        --distribution-id "$CHAT_CLOUDFRONT_DISTRIBUTION_ID" \
+        --paths "/*" \
+        --query 'Invalidation.Id' \
+        --output text)
+    
+    if [ $? -eq 0 ]; then
+        log_info "Chat CloudFront invalidation created: $INVALIDATION_ID ✅"
+        log_info "Cache will be cleared in 1-3 minutes"
+    else
+        log_error "Failed to create chat CloudFront invalidation"
+    fi
+}
+
+# Step 5: Create CloudFront for chat
 create_chat_cloudfront() {
     log_info "Creating CloudFront distribution for chat..."
     
@@ -170,6 +198,8 @@ main() {
     create_chat_bucket
     echo ""
     upload_chat
+    echo ""
+    invalidate_chat_cloudfront
     echo ""
     create_chat_cloudfront
 }

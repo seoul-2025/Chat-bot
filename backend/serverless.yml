@@ -31,6 +31,26 @@ functions:
           method: options
           cors: true
 
+  prompts:
+    handler: handlers.api.prompt_handler.lambda_handler
+    events:
+      - http:
+          path: prompts/{engineType}
+          method: get
+          cors: true
+      - http:
+          path: prompts/{engineType}/files
+          method: get
+          cors: true
+      - http:
+          path: prompts/{engineType}
+          method: options
+          cors: true
+      - http:
+          path: prompts/{engineType}/files
+          method: options
+          cors: true
+
 plugins:
   - serverless-python-requirements
 

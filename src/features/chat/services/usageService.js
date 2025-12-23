@@ -483,16 +483,16 @@ const updateLocalUsageBackup = (engineType, inputText, outputText) => {
 // 사용량 퍼센티지 계산 (async로 변경 - 서버 데이터 우선)
 export const getUsagePercentage = async (engineType, forceRefresh = false) => {
   try {
-    // 개발 환경에서는 모의 사용량 반환
-    if (import.meta.env.DEV) {
-      console.log('🔧 개발 모드: 모의 사용량 데이터 사용');
-      // 엔진별로 다른 모의 사용량 반환
-      const mockUsage = {
-        "11": 25, // 기업 보도자료 엔진 25% 사용
-        "22": 15  // 정부 보도자료 엔진 15% 사용
-      };
-      return mockUsage[engineType] || 0;
-    }
+    // 개발 환경에서도 실제 API 사용
+    // if (import.meta.env.DEV) {
+    //   console.log('🔧 개발 모드: 모의 사용량 데이터 사용');
+    //   // 엔진별로 다른 모의 사용량 반환
+    //   const mockUsage = {
+    //     "11": 25, // 기업 보도자료 엔진 25% 사용
+    //     "22": 15  // 정부 보도자료 엔진 15% 사용
+    //   };
+    //   return mockUsage[engineType] || 0;
+    // }
 
     // 캐시 체크 (5초간만 유효 - 매우 짧게)
     const cacheKey = `usage_percentage_${engineType}`;
@@ -670,16 +670,16 @@ export const getAllUsageStats = () => {
 // 서버에서 사용량 데이터 가져오기 (API 호출)
 export const fetchUsageFromServer = async (userId, engineType) => {
   try {
-    // 개발 환경에서는 모의 데이터 반환
-    if (import.meta.env.DEV) {
-      console.log('🔧 개발 모드: 모의 사용량 데이터 사용');
-      const mockData = {
-        percentage: engineType === "11" ? 25 : 15,
-        used: engineType === "11" ? 2500 : 1500,
-        limit: 10000
-      };
-      return mockData;
-    }
+    // 개발 환경에서도 실제 API 사용
+    // if (import.meta.env.DEV) {
+    //   console.log('🔧 개발 모드: 모의 사용량 데이터 사용');
+    //   const mockData = {
+    //     percentage: engineType === "11" ? 25 : 15,
+    //     used: engineType === "11" ? 2500 : 1500,
+    //     limit: 10000
+    //   };
+    //   return mockData;
+    // }
 
     const token = localStorage.getItem("access_token");
     const response = await fetch(

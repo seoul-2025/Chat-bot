@@ -5,7 +5,7 @@
     "Items": [
       {
         "Id": "S3-one-frontend-app",
-        "DomainName": "one-frontend-app.s3-website-us-east-1.amazonaws.com",
+        "DomainName": "one-frontend-bucket-unique-12345.s3-website-us-east-1.amazonaws.com",
         "CustomOriginConfig": {
           "HTTPPort": 80,
           "HTTPSPort": 443,

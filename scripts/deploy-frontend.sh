@@ -74,7 +74,35 @@ upload_to_s3() {
     log_info "Files uploaded to S3 ✅"
 }
 
-# Step 4: Create CloudFront distribution (optional)
+# Step 4: Invalidate CloudFront cache
+invalidate_cloudfront() {
+    log_info "Invalidating CloudFront cache..."
+    
+    # CloudFront Distribution ID (수동으로 설정 필요)
+    CLOUDFRONT_DISTRIBUTION_ID="${CLOUDFRONT_DISTRIBUTION_ID:-}"
+    
+    if [ -z "$CLOUDFRONT_DISTRIBUTION_ID" ]; then
+        log_warning "CLOUDFRONT_DISTRIBUTION_ID not set in config.sh"
+        log_info "Skipping CloudFront invalidation"
+        return 0
+    fi
+    
+    # Create invalidation for all files
+    INVALIDATION_ID=$(aws cloudfront create-invalidation \
+        --distribution-id "$CLOUDFRONT_DISTRIBUTION_ID" \
+        --paths "/*" \
+        --query 'Invalidation.Id' \
+        --output text)
+    
+    if [ $? -eq 0 ]; then
+        log_info "CloudFront invalidation created: $INVALIDATION_ID ✅"
+        log_info "Cache will be cleared in 1-3 minutes"
+    else
+        log_error "Failed to create CloudFront invalidation"
+    fi
+}
+
+# Step 5: Create CloudFront distribution (optional)
 create_cloudfront() {
     log_info "CloudFront distribution setup..."
     log_warning "CloudFront creation is manual - please configure in AWS Console"
@@ -95,6 +123,8 @@ main() {
     create_s3_bucket
     echo ""
     upload_to_s3
+    echo ""
+    invalidate_cloudfront
     echo ""
     create_cloudfront
     

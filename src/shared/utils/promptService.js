@@ -1,19 +1,8 @@
 // API 엔드포인트는 환경변수로 관리
-const API_ENDPOINT = import.meta.env.VITE_PROMPT_API_URL || '';
+const API_ENDPOINT = import.meta.env.VITE_PROMPT_API_URL || 'https://pinjzwk0qi.execute-api.us-east-1.amazonaws.com/prod';
 
 // 프롬프트 조회 (설명, 지침, 파일 목록)
 export const getPrompt = async (engineType) => {
-  // 개발 환경에서는 모의 데이터 반환
-  if (import.meta.env.DEV || !API_ENDPOINT) {
-    console.log('🔧 개발 모드: 모의 프롬프트 데이터 사용');
-    return {
-      engineType,
-      description: `${engineType} 엔진 설명`,
-      instructions: `${engineType} 엔진 지침`,
-      files: []
-    };
-  }
-
   try {
     const response = await fetch(`${API_ENDPOINT}/prompts/${engineType}`, {
       method: 'GET',
@@ -30,7 +19,15 @@ export const getPrompt = async (engineType) => {
     return data;
   } catch (error) {
     console.error('Error fetching prompt:', error);
-    throw error;
+    
+    // Fallback: 기본 프롬프트 데이터 반환
+    console.log('🔧 Fallback: 기본 프롬프트 데이터 사용');
+    return {
+      engineType,
+      description: `${engineType} 엔진 전용 AI 어시스턴트`,
+      instructions: `${engineType} 엔진에 맞는 전문적인 답변을 제공해주세요.`,
+      files: []
+    };
   }
 };
 
@@ -81,7 +78,7 @@ export const getFiles = async (engineType) => {
     return data.files || [];
   } catch (error) {
     console.error('Error fetching files:', error);
-    throw error;
+    return [];
   }
 };
 

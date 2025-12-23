@@ -32,6 +32,11 @@ export DYNAMODB_TABLES=(
 # S3 Buckets
 export FRONTEND_BUCKET="one-frontend-bucket-unique-12345"
 
+# CloudFront Configuration
+# 실제 CloudFront Distribution ID로 변경 필요
+export CLOUDFRONT_DISTRIBUTION_ID="E1SUZO5B5TC1AU"  # 메인 사이트용 (d3v6ptor2olfy0.cloudfront.net)
+export CHAT_CLOUDFRONT_DISTRIBUTION_ID=""  # 채팅 전용 사이트용
+
 # IAM Configuration
 export LAMBDA_ROLE="one-lambda-execution-role"
 

@@ -60,6 +60,41 @@ functions:
           path: /usage/{user_id}/{conversation_id}
           method: get
           cors: true
+      - http:
+          path: /usage/update
+          method: post
+          cors: true
+
+  # Claude API 프록시
+  claude-api-proxy:
+    handler: backend/handlers/api/claude_proxy_handler.lambda_handler
+    timeout: 30
+    events:
+      - http:
+          path: /api/claude/chat
+          method: post
+          cors: true
+      - http:
+          path: /api/claude/chat
+          method: options
+          cors: true
+
+  # 프롬프트 관리
+  prompt-handler:
+    handler: backend/handlers/api/prompt_handler.lambda_handler
+    events:
+      - http:
+          path: /prompts/{engineType}
+          method: get
+          cors: true
+      - http:
+          path: /prompts/{engineType}/files
+          method: get
+          cors: true
+      - http:
+          path: /prompts/{engineType}
+          method: options
+          cors: true
 
 resources:
   Resources:

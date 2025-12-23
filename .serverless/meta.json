@@ -94,6 +94,59 @@
                 "method": "get",
                 "cors": true
               }
+            },
+            {
+              "http": {
+                "path": "/usage/update",
+                "method": "post",
+                "cors": true
+              }
+            }
+          ]
+        },
+        "claude-api-proxy": {
+          "handler": "backend/handlers/api/claude_proxy_handler.lambda_handler",
+          "timeout": 30,
+          "events": [
+            {
+              "http": {
+                "path": "/api/claude/chat",
+                "method": "post",
+                "cors": true
+              }
+            },
+            {
+              "http": {
+                "path": "/api/claude/chat",
+                "method": "options",
+                "cors": true
+              }
+            }
+          ]
+        },
+        "prompt-handler": {
+          "handler": "backend/handlers/api/prompt_handler.lambda_handler",
+          "events": [
+            {
+              "http": {
+                "path": "/prompts/{engineType}",
+                "method": "get",
+                "cors": true
+              }
+            },
+            {
+              "http": {
+                "path": "/prompts/{engineType}/files",
+                "method": "get",
+                "cors": true
+              }
+            },
+            {
+              "http": {
+                "path": "/prompts/{engineType}",
+                "method": "options",
+                "cors": true
+              }
             }
           ]
         }
@@ -216,7 +269,7 @@
       "message": "You must sign in or use a license key with Serverless Framework V.4 and later versions. Please use \"serverless login\".",
       "stack": "Error: You must sign in or use a license key with Serverless Framework V.4 and later versions. Please use \"serverless login\".\n    at Authentication.getAuthenticatedData (file:///C:/Users/User/.serverless/releases/4.29.0/package/dist/sf-core.js:677:11187)\n    at process.processTicksAndRejections (node:internal/process/task_queues:105:5)\n    at async Authentication.authenticate (file:///C:/Users/User/.serverless/releases/4.29.0/package/dist/sf-core.js:680:4121)\n    at async TraditionalRunner.resolveVariablesAndAuthenticate (file:///C:/Users/User/.serverless/releases/4.29.0/package/dist/sf-core.js:688:2394)\n    at async TraditionalRunner.run (file:///C:/Users/User/.serverless/releases/4.29.0/package/dist/sf-core.js:1489:28091)\n    at async route (file:///C:/Users/User/.serverless/releases/4.29.0/package/dist/sf-core.js:1664:2848)\n    at async Object.run (file:///C:/Users/User/.serverless/releases/4.29.0/package/dist/sf-core.js:1665:3876)\n    at async run2 (file:///C:/Users/User/.serverless/releases/4.29.0/package/dist/sf-core.js:1665:5030)"
     },
-    "serviceRawFile": "service: one-service\n\nprovider:\n  name: aws\n  runtime: python3.9\n  region: us-east-1\n  stage: prod\n  environment:\n    CLAUDE_API_KEY: ${env:CLAUDE_API_KEY}\n\nfunctions:\n  # WebSocket Functions\n  websocket-connect:\n    handler: backend/handlers/websocket/connect_handler.lambda_handler\n    events:\n      - websocket:\n          route: $connect\n\n  websocket-disconnect:\n    handler: backend/handlers/websocket/disconnect_handler.lambda_handler\n    events:\n      - websocket:\n          route: $disconnect\n\n  websocket-message:\n    handler: backend/handlers/websocket/message_handler.lambda_handler\n    events:\n      - websocket:\n          route: message\n\n  # REST API Functions\n  conversation-api:\n    handler: backend/handlers/api/conversation_handler.lambda_handler\n    events:\n      - http:\n          path: /conversations\n          method: get\n          cors: true\n      - http:\n          path: /conversations\n          method: post\n          cors: true\n      - http:\n          path: /conversations/{id}\n          method: get\n          cors: true\n      - http:\n          path: /conversations/{id}\n          method: patch\n          cors: true\n      - http:\n          path: /conversations/{id}\n          method: delete\n          cors: true\n\n  usage-handler:\n    handler: backend/handlers/api/usage_handler.lambda_handler\n    events:\n      - http:\n          path: /usage/{user_id}/{conversation_id}\n          method: get\n          cors: true\n\nresources:\n  Resources:\n    # DynamoDB Tables\n    ConversationsTable:\n      Type: AWS::DynamoDB::Table\n      Properties:\n        TableName: one-conversations\n        AttributeDefinitions:\n          - AttributeName: conversation_id\n            AttributeType: S\n        KeySchema:\n          - AttributeName: conversation_id\n            KeyType: HASH\n        BillingMode: PAY_PER_REQUEST\n\n    MessagesTable:\n      Type: AWS::DynamoDB::Table\n      Properties:\n        TableName: one-messages\n        AttributeDefinitions:\n          - AttributeName: conversation_id\n            AttributeType: S\n          - AttributeName: message_id\n            AttributeType: S\n        KeySchema:\n          - AttributeName: conversation_id\n            KeyType: HASH\n          - AttributeName: message_id\n            KeyType: RANGE\n        BillingMode: PAY_PER_REQUEST\n\n    ConnectionsTable:\n      Type: AWS::DynamoDB::Table\n      Properties:\n        TableName: one-connections\n        AttributeDefinitions:\n          - AttributeName: connection_id\n            AttributeType: S\n        KeySchema:\n          - AttributeName: connection_id\n            KeyType: HASH\n        BillingMode: PAY_PER_REQUEST\n\n    UsageTable:\n      Type: AWS::DynamoDB::Table\n      Properties:\n        TableName: one-usage\n        AttributeDefinitions:\n          - AttributeName: user_id\n            AttributeType: S\n          - AttributeName: conversation_id\n            AttributeType: S\n        KeySchema:\n          - AttributeName: user_id\n            KeyType: HASH\n          - AttributeName: conversation_id\n            KeyType: RANGE\n        BillingMode: PAY_PER_REQUEST\n\nplugins:\n  - serverless-python-requirements\n\ncustom:\n  pythonRequirements:\n    dockerizePip: false",
+    "serviceRawFile": "service: one-service\n\nprovider:\n  name: aws\n  runtime: python3.9\n  region: us-east-1\n  stage: prod\n  environment:\n    CLAUDE_API_KEY: ${env:CLAUDE_API_KEY}\n\nfunctions:\n  # WebSocket Functions\n  websocket-connect:\n    handler: backend/handlers/websocket/connect_handler.lambda_handler\n    events:\n      - websocket:\n          route: $connect\n\n  websocket-disconnect:\n    handler: backend/handlers/websocket/disconnect_handler.lambda_handler\n    events:\n      - websocket:\n          route: $disconnect\n\n  websocket-message:\n    handler: backend/handlers/websocket/message_handler.lambda_handler\n    events:\n      - websocket:\n          route: message\n\n  # REST API Functions\n  conversation-api:\n    handler: backend/handlers/api/conversation_handler.lambda_handler\n    events:\n      - http:\n          path: /conversations\n          method: get\n          cors: true\n      - http:\n          path: /conversations\n          method: post\n          cors: true\n      - http:\n          path: /conversations/{id}\n          method: get\n          cors: true\n      - http:\n          path: /conversations/{id}\n          method: patch\n          cors: true\n      - http:\n          path: /conversations/{id}\n          method: delete\n          cors: true\n\n  usage-handler:\n    handler: backend/handlers/api/usage_handler.lambda_handler\n    events:\n      - http:\n          path: /usage/{user_id}/{conversation_id}\n          method: get\n          cors: true\n      - http:\n          path: /usage/update\n          method: post\n          cors: true\n\n  # Claude API 프록시\n  claude-api-proxy:\n    handler: backend/handlers/api/claude_proxy_handler.lambda_handler\n    timeout: 30\n    events:\n      - http:\n          path: /api/claude/chat\n          method: post\n          cors: true\n      - http:\n          path: /api/claude/chat\n          method: options\n          cors: true\n\n  # 프롬프트 관리\n  prompt-handler:\n    handler: backend/handlers/api/prompt_handler.lambda_handler\n    events:\n      - http:\n          path: /prompts/{engineType}\n          method: get\n          cors: true\n      - http:\n          path: /prompts/{engineType}/files\n          method: get\n          cors: true\n      - http:\n          path: /prompts/{engineType}\n          method: options\n          cors: true\n\nresources:\n  Resources:\n    # DynamoDB Tables\n    ConversationsTable:\n      Type: AWS::DynamoDB::Table\n      Properties:\n        TableName: one-conversations\n        AttributeDefinitions:\n          - AttributeName: conversation_id\n            AttributeType: S\n        KeySchema:\n          - AttributeName: conversation_id\n            KeyType: HASH\n        BillingMode: PAY_PER_REQUEST\n\n    MessagesTable:\n      Type: AWS::DynamoDB::Table\n      Properties:\n        TableName: one-messages\n        AttributeDefinitions:\n          - AttributeName: conversation_id\n            AttributeType: S\n          - AttributeName: message_id\n            AttributeType: S\n        KeySchema:\n          - AttributeName: conversation_id\n            KeyType: HASH\n          - AttributeName: message_id\n            KeyType: RANGE\n        BillingMode: PAY_PER_REQUEST\n\n    ConnectionsTable:\n      Type: AWS::DynamoDB::Table\n      Properties:\n        TableName: one-connections\n        AttributeDefinitions:\n          - AttributeName: connection_id\n            AttributeType: S\n        KeySchema:\n          - AttributeName: connection_id\n            KeyType: HASH\n        BillingMode: PAY_PER_REQUEST\n\n    UsageTable:\n      Type: AWS::DynamoDB::Table\n      Properties:\n        TableName: one-usage\n        AttributeDefinitions:\n          - AttributeName: user_id\n            AttributeType: S\n          - AttributeName: conversation_id\n            AttributeType: S\n        KeySchema:\n          - AttributeName: user_id\n            KeyType: HASH\n          - AttributeName: conversation_id\n            KeyType: RANGE\n        BillingMode: PAY_PER_REQUEST\n\nplugins:\n  - serverless-python-requirements\n\ncustom:\n  pythonRequirements:\n    dockerizePip: false",
     "command": [
       "deploy"
     ],

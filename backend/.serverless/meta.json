@@ -48,6 +48,39 @@
               }
             }
           ]
+        },
+        "prompts": {
+          "handler": "handlers.api.prompt_handler.lambda_handler",
+          "events": [
+            {
+              "http": {
+                "path": "prompts/{engineType}",
+                "method": "get",
+                "cors": true
+              }
+            },
+            {
+              "http": {
+                "path": "prompts/{engineType}/files",
+                "method": "get",
+                "cors": true
+              }
+            },
+            {
+              "http": {
+                "path": "prompts/{engineType}",
+                "method": "options",
+                "cors": true
+              }
+            },
+            {
+              "http": {
+                "path": "prompts/{engineType}/files",
+                "method": "options",
+                "cors": true
+              }
+            }
+          ]
         }
       },
       "plugins": [
@@ -73,7 +106,7 @@
       "message": "You must sign in or use a license key with Serverless Framework V.4 and later versions. Please use \"serverless login\".",
       "stack": "Error: You must sign in or use a license key with Serverless Framework V.4 and later versions. Please use \"serverless login\".\n    at Authentication.getAuthenticatedData (file:///C:/Users/User/.serverless/releases/4.29.0/package/dist/sf-core.js:677:11187)\n    at process.processTicksAndRejections (node:internal/process/task_queues:105:5)\n    at async Authentication.authenticate (file:///C:/Users/User/.serverless/releases/4.29.0/package/dist/sf-core.js:680:4121)\n    at async TraditionalRunner.resolveVariablesAndAuthenticate (file:///C:/Users/User/.serverless/releases/4.29.0/package/dist/sf-core.js:688:2394)\n    at async TraditionalRunner.run (file:///C:/Users/User/.serverless/releases/4.29.0/package/dist/sf-core.js:1489:28091)\n    at async route (file:///C:/Users/User/.serverless/releases/4.29.0/package/dist/sf-core.js:1664:2848)\n    at async Object.run (file:///C:/Users/User/.serverless/releases/4.29.0/package/dist/sf-core.js:1665:3876)\n    at async run2 (file:///C:/Users/User/.serverless/releases/4.29.0/package/dist/sf-core.js:1665:5030)"
     },
-    "serviceRawFile": "service: one-backend\n\nprovider:\n  name: aws\n  runtime: python3.9\n  region: us-east-1\n  environment:\n    GOOGLE_SEARCH_API_KEY: ${env:GOOGLE_SEARCH_API_KEY}\n    GOOGLE_SEARCH_ENGINE_ID: ${env:GOOGLE_SEARCH_ENGINE_ID}\n    CLAUDE_API_KEY: ${env:CLAUDE_API_KEY}\n\nfunctions:\n  websocket-message:\n    handler: handlers.websocket.message.handler\n    events:\n      - websocket:\n          route: message\n    environment:\n      GOOGLE_SEARCH_API_KEY: ${env:GOOGLE_SEARCH_API_KEY}\n      GOOGLE_SEARCH_ENGINE_ID: ${env:GOOGLE_SEARCH_ENGINE_ID}\n  \n  usage:\n    handler: handlers.api.usage_handler.lambda_handler\n    events:\n      - http:\n          path: usage/anonymous/{userId}\n          method: get\n          cors: true\n      - http:\n          path: usage/anonymous/{userId}\n          method: options\n          cors: true\n\nplugins:\n  - serverless-python-requirements\n\ncustom:\n  pythonRequirements:\n    dockerizePip: true",
+    "serviceRawFile": "service: one-backend\n\nprovider:\n  name: aws\n  runtime: python3.9\n  region: us-east-1\n  environment:\n    GOOGLE_SEARCH_API_KEY: ${env:GOOGLE_SEARCH_API_KEY}\n    GOOGLE_SEARCH_ENGINE_ID: ${env:GOOGLE_SEARCH_ENGINE_ID}\n    CLAUDE_API_KEY: ${env:CLAUDE_API_KEY}\n\nfunctions:\n  websocket-message:\n    handler: handlers.websocket.message.handler\n    events:\n      - websocket:\n          route: message\n    environment:\n      GOOGLE_SEARCH_API_KEY: ${env:GOOGLE_SEARCH_API_KEY}\n      GOOGLE_SEARCH_ENGINE_ID: ${env:GOOGLE_SEARCH_ENGINE_ID}\n  \n  usage:\n    handler: handlers.api.usage_handler.lambda_handler\n    events:\n      - http:\n          path: usage/anonymous/{userId}\n          method: get\n          cors: true\n      - http:\n          path: usage/anonymous/{userId}\n          method: options\n          cors: true\n\n  prompts:\n    handler: handlers.api.prompt_handler.lambda_handler\n    events:\n      - http:\n          path: prompts/{engineType}\n          method: get\n          cors: true\n      - http:\n          path: prompts/{engineType}/files\n          method: get\n          cors: true\n      - http:\n          path: prompts/{engineType}\n          method: options\n          cors: true\n      - http:\n          path: prompts/{engineType}/files\n          method: options\n          cors: true\n\nplugins:\n  - serverless-python-requirements\n\ncustom:\n  pythonRequirements:\n    dockerizePip: true",
     "command": [
       "deploy"
     ],
