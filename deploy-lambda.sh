@@ -1,5 +1,10 @@
 #!/bin/bash
 
+# 환경변수 로드
+if [ -f .env ]; then
+    export $(cat .env | xargs)
+fi
+
 # Lambda 함수 생성 또는 업데이트
 FUNCTION_NAME="claude-api-proxy"
 ZIP_FILE="claude-api-lambda.zip"
@@ -29,7 +34,7 @@ fi
 echo "🔧 환경 변수 설정 중..."
 aws lambda update-function-configuration \
     --function-name $FUNCTION_NAME \
-    --environment Variables="{CLAUDE_API_KEY=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}"
+    --environment Variables="{CLAUDE_API_KEY=$CLAUDE_API_KEY}"
 
 echo "✅ Lambda 함수 배포 완료!"
 echo "📍 함수명: $FUNCTION_NAME"
