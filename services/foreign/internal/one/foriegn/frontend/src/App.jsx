@@ -161,38 +161,17 @@ function AppContent() {
     // Header에 사용자 정보 업데이트 알림
     window.dispatchEvent(new CustomEvent("userInfoUpdated"));
 
-    // 현재 페이지가 랜딩 페이지가 아닌 경우에만 랜딩 페이지로 이동
-    if (location.pathname !== "/") {
-      console.log("📍 랜딩 페이지로 이동");
-      navigate("/");
-    } else {
-      console.log("📍 현재 랜딩 페이지 유지");
-    }
+    // 로그아웃 후 /11로 이동
+    console.log("📍 /11 페이지로 이동");
+    navigate("/11");
   };
 
   const handleLogin = (role = "user") => {
     console.log("🔐 handleLogin called with role:", role);
     setIsLoggedIn(true);
     setUserRole(role);
-    // location.state에서 엔진 정보 가져오기
-    const engine = location.state?.engine || selectedEngine;
-    setSelectedEngine(engine);
-
-    // 관리자도 일반 사용자처럼 엔진 페이지로 이동
-    if (role === "admin") {
-      console.log("🔐 Admin user detected, navigating to default engine page");
-      const enginePath = selectedEngine.toLowerCase();
-      navigate(`/${enginePath}`);
-    } else if (location.state?.engine) {
-      // 엔진이 선택된 상태에서 로그인했다면 해당 엔진 페이지로 이동
-      const enginePath = engine.toLowerCase();
-      console.log("🔐 Navigating to engine page:", enginePath);
-      navigate(`/${enginePath}`);
-    } else {
-      // 엔진이 선택되지 않은 상태(헤더 로그인 버튼 등)에서는 랜딩 페이지로 이동
-      console.log("🔐 Navigating to landing page");
-      navigate("/");
-    }
+    // 항상 /11로 이동
+    navigate("/11");
   };
 
   const handleSelectEngine = (engine) => {
@@ -224,7 +203,7 @@ function AppContent() {
   };
 
   const handleBackToLanding = () => {
-    navigate("/");
+    navigate("/11");
   };
 
   const handleTitleUpdate = (newTitle) => {
@@ -300,21 +279,11 @@ function AppContent() {
               location={location}
               key={location.pathname.split("/").slice(0, 3).join("/")}
             >
-              <Route
-                path="/"
-                element={
-                  <PageTransition pageKey="landing">
-                    <LandingPage
-                      onSelectEngine={handleSelectEngine}
-                      onLogin={handleLogin}
-                      onLogout={handleLogout}
-                    />
-                  </PageTransition>
-                }
-              />
-              {/* 로그인/회원가입 라우트 비활성화 - 랜딩 페이지로 리다이렉트 */}
-              <Route path="/login" element={<Navigate to="/" replace />} />
-              <Route path="/signup" element={<Navigate to="/" replace />} />
+              {/* 랜딩페이지 제거 - 바로 /11로 리다이렉트 */}
+              <Route path="/" element={<Navigate to="/11" replace />} />
+              {/* 로그인/회원가입 비활성화 - /11로 리다이렉트 */}
+              <Route path="/login" element={<Navigate to="/11" replace />} />
+              <Route path="/signup" element={<Navigate to="/11" replace />} />
               <Route
                 path="/11/chat/:conversationId?"
                 element={
@@ -422,8 +391,8 @@ function AppContent() {
                   </ProtectedRoute>
                 }
               />
-              {/* 기본 리다이렉트 */}
-              <Route path="*" element={<Navigate to="/" replace />} />
+              {/* 기본 리다이렉트 - /11로 이동 */}
+              <Route path="*" element={<Navigate to="/11" replace />} />
             </Routes>
           </Suspense>
         </AnimatePresence>

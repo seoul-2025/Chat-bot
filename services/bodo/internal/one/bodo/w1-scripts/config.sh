@@ -1,21 +1,33 @@
 #!/bin/bash
-# W1.SEDAILY.AI Service Configuration
-# ====================================
-# This file contains all configuration for w1.sedaily.ai service ONLY
+# ============================================================
+# BODO Internal Service - Frontend Configuration
+# ============================================================
+# Internal press release AI service (No login, No sidebar)
+# Backend is shared with w1.sedaily.ai, only frontend is separate
+#
+# Comparison:
+#   - external/two (w1.sedaily.ai): Public, with login/sidebar
+#   - internal/one (this service): Internal, direct to chat
+#
+# Last Updated: 2025-12-24
+# ============================================================
 
-# AWS Configuration
-export AWS_REGION="us-east-1"
+# AWS Configuration (Frontend deployed to ap-northeast-2)
+export AWS_REGION="ap-northeast-2"
 export AWS_ACCOUNT_ID="887078546492"
 
 # Service Identification
-export SERVICE_NAME="w1"
-export DOMAIN="w1.sedaily.ai"
+export SERVICE_NAME="bodo-internal"
+export DOMAIN="d2emwatb21j743.cloudfront.net"
 
-# API Gateway IDs (DO NOT CHANGE - These are production IDs)
+# ============================================================
+# SHARED BACKEND RESOURCES (Same as w1.sedaily.ai)
+# ============================================================
+# API Gateway IDs (us-east-1)
 export REST_API_ID="16ayefk5lc"
 export WS_API_ID="prsebeg7ub"
 
-# Lambda Functions (w1 prefix only)
+# Lambda Functions (us-east-1)
 export LAMBDA_FUNCTIONS=(
     "w1-websocket-message"
     "w1-websocket-connect"
@@ -25,7 +37,7 @@ export LAMBDA_FUNCTIONS=(
     "w1-prompt-crud"
 )
 
-# DynamoDB Tables
+# DynamoDB Tables (us-east-1)
 export DYNAMODB_TABLES=(
     "w1-conversations"
     "w1-messages"
@@ -34,17 +46,18 @@ export DYNAMODB_TABLES=(
     "w1-connections"
 )
 
-# S3 Buckets
-export FRONTEND_BUCKET="w1-sedaily-frontend"
+# IAM & Secrets (us-east-1)
+export LAMBDA_ROLE="w1-lambda-execution-role"
+export SECRET_NAME="bodo-v1"
+
+# ============================================================
+# FRONTEND RESOURCES (internal/one only - ap-northeast-2)
+# ============================================================
+# S3 Bucket
+export FRONTEND_BUCKET="bodo-frontend-20251204-230645dc"
 
 # CloudFront Distribution
-export CLOUDFRONT_ID="E10S6CKR5TLUBG"
-
-# IAM Configuration
-export LAMBDA_ROLE="w1-lambda-execution-role"
-
-# Secrets Manager
-export SECRET_NAME="bodo-v1"
+export CLOUDFRONT_ID="EDF1H6DB796US"
 
 # API Configuration
 export ANTHROPIC_MODEL="claude-opus-4-5-20251101"

@@ -1,382 +1,268 @@
-# w1.sedaily.ai
-AI Press Release Service - Claude Opus 4.5 based real-time press release writing assistant
+# BODO Internal Service
 
-Last Updated: 2025-12-21
+AI Press Release Service - Internal Version (No Login, No Sidebar)
+
+Last Updated: 2025-12-24
 
 ## Overview
-w1.sedaily.ai is an AI-powered press release writing assistant for Seoul Economic Daily journalists. It features real-time WebSocket communication, native web search integration, 12-step systematic prompts, and prompt caching for cost optimization.
 
-Live: https://w1.sedaily.ai
+This is the **internal version** of the BODO AI press release service. It shares the same backend as `w1.sedaily.ai` but has a simplified frontend without login and sidebar functionality. Users are directed straight to the chat interface.
 
-## Features
-- Real-time Streaming: WebSocket-based streaming responses
-- Web Search: Anthropic's native web search integration (web_search_20250305)
-- Prompt Caching: 90% cost reduction with ephemeral cache
-- DynamoDB Caching: Permanent prompt cache in Lambda container
-- Multiple AI Providers: Anthropic API primary, Bedrock fallback
-- 12-Step System Prompt: Comprehensive journalist-focused prompt structure
-- Multi-Engine Support: Multiple prompt templates (engine types 11, 22, 33)
-- Korean Language: Optimized for Korean press release writing
+**Live URL:** https://d2emwatb21j743.cloudfront.net
+
+## Comparison with w1.sedaily.ai
+
+| Feature | external/two (w1.sedaily.ai) | internal/one (this service) |
+|---------|------------------------------|------------------------------|
+| Purpose | Public/External | Internal |
+| Login | Required | Not required |
+| Sidebar | Yes | No |
+| Direct to Chat | No (via landing) | Yes |
+| Domain | w1.sedaily.ai | d2emwatb21j743.cloudfront.net |
+| S3 Bucket | w1-sedaily-frontend | bodo-frontend-20251204-230645dc |
+| CloudFront | E10S6CKR5TLUBG (us-east-1) | EDF1H6DB796US (ap-northeast-2) |
 
 ## Architecture
+
 ```
-Frontend (React)
-  ↓
-CloudFront (E10S6CKR5TLUBG)
-  ↓
-S3 (w1-sedaily-frontend)
-
-WebSocket Flow:
-User → API Gateway WebSocket (prsebeg7ub) → Lambda (w1-websocket-message)
-  ↓
-Anthropic Claude Opus 4.5 (with web search)
-  ↓
-Streaming Response → User
-
-REST API Flow:
-User → API Gateway REST (16ayefk5lc) → Lambda (conversation/prompt/usage)
-  ↓
-DynamoDB (conversations, prompts, usage tracking)
+┌─────────────────────────────────────────────────────────────┐
+│                    FRONTEND (Separate)                       │
+├─────────────────────────────────────────────────────────────┤
+│  internal/one                    external/two                │
+│  ├─ S3: bodo-frontend-*          ├─ S3: w1-sedaily-frontend │
+│  ├─ CloudFront: EDF1H6DB796US    ├─ CloudFront: E10S6CKR5TLUBG│
+│  └─ Region: ap-northeast-2       └─ Region: us-east-1       │
+│                                                              │
+│  Features:                       Features:                   │
+│  - No login                      - Login required            │
+│  - No sidebar                    - Sidebar enabled           │
+│  - Direct to /11 chat            - Landing page              │
+└─────────────────────────────────────────────────────────────┘
+                              │
+                              ▼
+┌─────────────────────────────────────────────────────────────┐
+│                    BACKEND (Shared)                          │
+├─────────────────────────────────────────────────────────────┤
+│  API Gateway (us-east-1)                                     │
+│  ├─ REST API: 16ayefk5lc                                    │
+│  └─ WebSocket: prsebeg7ub                                   │
+│                                                              │
+│  Lambda Functions (us-east-1)                                │
+│  ├─ w1-websocket-message (Claude Opus 4.5 + Web Search)     │
+│  ├─ w1-websocket-connect                                    │
+│  ├─ w1-websocket-disconnect                                 │
+│  ├─ w1-conversation-api                                     │
+│  ├─ w1-prompt-crud                                          │
+│  └─ w1-usage-handler                                        │
+│                                                              │
+│  DynamoDB Tables (us-east-1)                                 │
+│  ├─ w1-conversations                                        │
+│  ├─ w1-messages                                             │
+│  ├─ w1-prompts                                              │
+│  ├─ w1-usage                                                │
+│  └─ w1-connections                                          │
+│                                                              │
+│  AI: Claude Opus 4.5 (Anthropic API)                        │
+│  Secrets: bodo-v1 (Anthropic API Key)                       │
+└─────────────────────────────────────────────────────────────┘
 ```
 
 ## Project Structure
+
 ```
 .
 ├── README.md
-├── PROMPT_CACHING_OPTIMIZATION.md
-├── backend/
+├── backend/                    # Shared with w1.sedaily.ai
 │   ├── handlers/
-│   │   ├── api/              # REST API handlers
-│   │   └── websocket/        # WebSocket handlers
 │   ├── lib/
-│   │   ├── anthropic_client.py       # Anthropic API client
-│   │   ├── bedrock_client.py         # Bedrock fallback
-│   │   └── bedrock_client_enhanced.py # 12-step system prompt
 │   ├── services/
-│   │   └── websocket_service.py      # Main WebSocket service
-│   ├── src/
-│   │   ├── config/
-│   │   ├── models/
-│   │   └── repositories/
-│   ├── utils/
 │   └── requirements.txt
-├── config/
-├── frontend/
-│   └── src/
+├── frontend/                   # Modified for internal use
+│   ├── src/
+│   │   ├── App.jsx            # No ProtectedRoute, sidebar disabled
+│   │   └── ...
+│   ├── .env
+│   └── package.json
 └── w1-scripts/
-    ├── config.sh             # Environment configuration
-    ├── deploy-backend.sh     # Backend deployment
-    └── deploy-frontend.sh    # Frontend deployment
+    ├── config.sh              # Frontend: ap-northeast-2
+    ├── deploy-frontend.sh     # Deploy to internal CloudFront
+    └── deploy-backend.sh      # Deploy to shared Lambda (us-east-1)
 ```
 
 ## Quick Start
 
 ### Prerequisites
-- AWS CLI configured
+- AWS CLI configured with appropriate credentials
 - Node.js 18+
 - Python 3.11+
-- AWS Account: 887078546492
 
-### Deployment
+### Frontend Deployment
+
 ```bash
-# Backend deployment (Lambda functions)
 cd w1-scripts
-./deploy-backend.sh
 
-# Frontend deployment (React app)
+# Deploy frontend (builds, uploads to S3, invalidates CloudFront)
 ./deploy-frontend.sh
+
+# Auto-confirm mode
+./deploy-frontend.sh -y
 ```
 
-## Current Deployment
-Status: Production Ready
+### Backend Deployment
 
-Updated: 2025-12-20
+> **Note:** Backend is shared with w1.sedaily.ai. Deploy carefully.
 
-## URLs
-| Resource | URL |
-|----------|-----|
-| Primary Domain | https://w1.sedaily.ai |
-| CloudFront | https://d9am5o27m55dc.cloudfront.net |
-| REST API | https://16ayefk5lc.execute-api.us-east-1.amazonaws.com/prod |
-| WebSocket API | wss://prsebeg7ub.execute-api.us-east-1.amazonaws.com/prod |
+```bash
+cd w1-scripts
+./deploy-backend.sh
+```
 
-## AWS Resources (us-east-1)
+### Log Monitoring
 
-### Lambda Functions
-| Function | Purpose |
-|----------|---------|
-| w1-websocket-message | Main chat handler (Claude API + Web Search) |
-| w1-websocket-connect | WebSocket connection handler |
-| w1-websocket-disconnect | WebSocket disconnect handler |
-| w1-conversation-api | Conversation CRUD |
-| w1-prompt-crud | Prompt management |
-| w1-usage-handler | Usage tracking |
+```bash
+# Real-time Lambda logs
+aws logs tail /aws/lambda/w1-websocket-message --follow --region us-east-1
+```
 
-### DynamoDB Tables
-| Table | Purpose |
-|-------|---------|
-| w1-conversations | Chat history |
-| w1-messages | Individual messages |
-| w1-prompts | System prompts |
-| w1-usage | API usage tracking |
-| w1-connections | WebSocket connections |
+## AWS Resources
 
-### Other Resources
-| Resource | Value |
-|----------|-------|
-| S3 Bucket | w1-sedaily-frontend |
-| CloudFront Distribution | E10S6CKR5TLUBG (d9am5o27m55dc.cloudfront.net) |
-| Secrets Manager | bodo-v1 (Anthropic API key) |
-| IAM Role | w1-lambda-execution-role |
+### Frontend Resources (internal/one only)
+
+| Resource | Value | Region |
+|----------|-------|--------|
+| S3 Bucket | bodo-frontend-20251204-230645dc | ap-northeast-2 |
+| CloudFront | EDF1H6DB796US | ap-northeast-2 |
+| Domain | d2emwatb21j743.cloudfront.net | - |
+
+### Shared Backend Resources
+
+| Resource | Value | Region |
+|----------|-------|--------|
+| REST API | 16ayefk5lc | us-east-1 |
+| WebSocket API | prsebeg7ub | us-east-1 |
+| Lambda Functions | w1-* | us-east-1 |
+| DynamoDB Tables | w1-* | us-east-1 |
+| Secrets Manager | bodo-v1 | us-east-1 |
+| IAM Role | w1-lambda-execution-role | us-east-1 |
 
 ## AI Configuration
+
 | Setting | Value |
 |---------|-------|
-| Primary Provider | Anthropic API |
+| Provider | Anthropic API (Primary) |
 | Model | claude-opus-4-5-20251101 |
 | Max Tokens | 4096 |
 | Temperature | 0.3 |
 | Fallback | AWS Bedrock |
 | Web Search | Enabled (web_search_20250305) |
-| Prompt Caching | Enabled |
+| Prompt Caching | Enabled (90% cost reduction) |
+
+## Frontend Modifications
+
+The following changes were made to create the internal version:
+
+1. **ProtectedRoute Removed** - `/11`, `/22`, `/11/chat/*`, `/22/chat/*` routes no longer require login
+2. **Sidebar Disabled** - `showSidebar = false` in App.jsx
+3. **Login Button Hidden** - Header shows no login button for logged-out users
+4. **Direct Redirect** - `/` redirects directly to `/11` (no landing page)
+5. **LandingPage Removed** - Unused import removed from App.jsx
 
 ## Change History
 
-### Phase 9: Final Testing & Deployment Verification (2025-12-21)
-- **Production deployment verified** - All components tested and working
-- Backend: 6/6 Lambda functions deployed successfully
-- Frontend: S3 + CloudFront deployment complete (72 files)
-- Authentication: Cognito login verified
-- HTTP Status: 200 OK
-- Fixed `deploy-frontend.sh` to support non-interactive execution (`-y` flag)
-- All deployment scripts tested and verified
+### Phase 1: Initial Setup & Sync (2025-12-24)
 
-### Phase 8: Cost Optimization & Code Cleanup (2025-12-20)
-- Deployed Anthropic API prompt caching to all Lambda functions
-- 90% cost reduction on cache hits ($0.50/1M vs $5.00/1M)
-- Fixed Anthropic API to use 12-step `create_enhanced_system_prompt()`
-- Previously used simple `_build_system_prompt()` method
-- Removed unused configs from aws.py:
-  - `S3_CONFIG`, `CLOUDWATCH_CONFIG`, `COGNITO_CONFIG`, `GUARDRAIL_CONFIG`
-- Deleted unused backend modules:
-  - `src/services/prompt_service.py`, `usage_service.py`
-  - `src/repositories/prompt_repository.py`, `usage_repository.py`
-  - `src/models/prompt.py`, `usage.py`
-- Removed deprecated `_build_system_prompt()` method from websocket_service.py
-- Created work-logs/ directory for development tracking
-- Added comprehensive .gitignore
-- Deleted test files: `test_current_issues.py`, `test_prompt_caching.py`, `test_web_search.py`
-- Deleted outdated: `upgrade-scripts/`, `SCRIPT_STATUS_SUMMARY.md`
-- README restructured to reference format with full change history
+**Objective:** Create internal version by syncing with external/two and modifying frontend
 
-### Phase 7: Web Search Feature (2025-12-14)
-- Added Anthropic native web_search_20250305 tool
-- Implemented citation formatting with trust icons
-- Enhanced date handling for search results
-- Web search engine: Brave Search
-- Max uses: 5 per request
-- All Lambda functions updated with new code
+**Tasks Completed:**
+1. Synced codebase from `external/two` to `internal/one`
+2. Removed unnecessary documentation files:
+   - DEPLOYMENT.md
+   - W1_SERVICE_MAPPING.md
+   - infrastructure/
+   - frontend/deploy/
+3. Copied README.md and .gitignore from external/two
+4. Updated backend code:
+   - Added citation_formatter.py
+   - Updated anthropic_client.py (Prompt Caching, Web Search)
+   - Updated websocket_service.py (permanent cache)
+   - Removed unused files (prompt.py, usage.py, etc.)
 
-### Phase 6: Claude Opus 4.5 Migration (2024-11)
-- Migrated from AWS Bedrock to Anthropic Direct API
-- Model: `claude-opus-4-5-20251101` (Claude Opus 4.5)
-- Added dual AI provider support:
-  - Primary: Anthropic API (direct)
-  - Fallback: AWS Bedrock (claude-sonnet-4)
-- Integrated Secrets Manager for API key storage
-- Added `anthropic_client.py`:
-  - Streaming response support
-  - Secrets Manager integration
-  - Web search tool configuration
-- Updated `bedrock_client_enhanced.py` as fallback
+### Phase 2: Frontend Customization (2025-12-24)
 
-### Phase 5: 12-Step System Prompt (2024-10)
-- Created `create_enhanced_system_prompt()` function
-- CoT-based 12-step systematic prompt structure:
-  1. IDENTITY & MISSION - Role and goal definition
-  2. SECURITY RULES - Input validation and safety
-  3. CORE PROCESS - 5-step execution workflow
-  4. JOURNALIST FEATURES - Press release specific
-  5. KOREAN LANGUAGE RULES - Language optimization
-  6. OUTPUT RULES - Format guidelines
-  7. TIME-SENSITIVE HANDLING - Current events
-  8. ETHICS - Journalism ethics
-  9. WEB SEARCH CITATION - Source formatting
-  10. QUALITY CHECK - Output validation
-  11. NEVER DO THIS - Prohibited actions
-  12. REMEMBER - Key reminders
-- Engine type support: 11, 22, 33 variants
+**Objective:** Remove login/sidebar for internal use
 
-### Phase 4: WebSocket Real-time Chat (2024-10)
-- Implemented WebSocket API via API Gateway
-- Created WebSocket Lambda handlers:
-  - `connect.py` - Connection management
-  - `message.py` - Chat message processing
-  - `disconnect.py` - Cleanup on disconnect
-  - `conversation_manager.py` - Conversation state
-- DynamoDB tables for WebSocket:
-  - `w1-connections` - Active connections
-  - `w1-conversations` - Chat history
-- Streaming response support for real-time AI output
-- Connection state management with DynamoDB
+**Tasks Completed:**
+1. Removed ProtectedRoute from main routes:
+   - `/11` - MainContent without auth check
+   - `/22` - MainContent without auth check
+   - `/11/chat/:conversationId?` - ChatPage without auth check
+   - `/22/chat/:conversationId?` - ChatPage without auth check
+2. Disabled sidebar: `showSidebar = false`
+3. Hidden login button in Header for logged-out users
+4. Removed unused LandingPage import
+5. Updated route `/` to redirect directly to `/11`
 
-### Phase 3: REST API Development (2024-09)
-- Created REST API handlers:
-  - `conversation.py` - Conversation CRUD operations
-  - `prompt.py` - System prompt management
-  - `usage.py` - Usage tracking and analytics
-- DynamoDB tables:
-  - `w1-prompts` - System prompts storage
-  - `w1-usage` - API usage metrics
-  - `w1-messages` - Message history
-- API Gateway REST API configuration
-- CORS configuration for frontend
+### Phase 3: AWS Configuration (2025-12-24)
 
-### Phase 2: Frontend Development (2024-09)
-- React application setup
-- TypeScript configuration
-- Tailwind CSS styling
-- Chat UI components
-- WebSocket client integration
+**Objective:** Configure separate frontend deployment
 
-### Phase 1: Infrastructure Setup (2024-09)
-- AWS infrastructure provisioning
-- S3 bucket: `w1-sedaily-frontend-bucket`
-- CloudFront distribution: `d9am5o27m55dc`
-- Custom domain: `w1.sedaily.ai`
-- SSL certificate configuration
-- API Gateway setup (REST + WebSocket)
-- Lambda function deployment
-- DynamoDB table creation
-- IAM role configuration
+**Tasks Completed:**
+1. Updated config.sh:
+   - AWS_REGION: ap-northeast-2 (for frontend)
+   - DOMAIN: d2emwatb21j743.cloudfront.net
+   - FRONTEND_BUCKET: bodo-frontend-20251204-230645dc
+   - CLOUDFRONT_ID: EDF1H6DB796US
+   - Shared backend resources remain unchanged (us-east-1)
+2. Updated .env:
+   - VITE_CLOUDFRONT_DOMAIN: d2emwatb21j743.cloudfront.net
 
-## Deployment Guide
+### Phase 4: Deployment Script Update (2025-12-24)
 
-### Deploy Scripts
-```bash
-cd w1-scripts
+**Objective:** Fix MIME type issues and update scripts
 
-# Backend deployment (Lambda functions)
-./deploy-backend.sh
-
-# Frontend deployment (React app)
-./deploy-frontend.sh
-```
-
-### Environment Configuration
-Settings managed in `w1-scripts/config.sh`:
-- AWS resource IDs
-- Lambda function names
-- API Gateway endpoints
-- S3/CloudFront configuration
-
-### Log Monitoring
-```bash
-# Real-time Lambda logs
-aws logs tail /aws/lambda/w1-websocket-message --follow
-```
-
-## Cost Optimization
-
-### Prompt Caching (90% savings)
-- System prompt cached with ephemeral TTL
-- Cache hit: $0.50/1M tokens vs $5.00/1M tokens
-- Beta header: `anthropic-beta: prompt-caching-2024-07-31`
-
-### DynamoDB Caching
-- Permanent in-memory cache in Lambda container
-- DB queries only on cold start
-- Cache management: `clear_prompt_cache()`, `get_cache_stats()`
-
-### Estimated Monthly Cost
-| Service | Cost |
-|---------|------|
-| Anthropic Claude | ~$50-100 |
-| Lambda | ~$15 |
-| DynamoDB | ~$5 |
-| S3/CloudFront | ~$5 |
-| **Total** | **~$75-125/month** |
-
-## Tech Stack
-
-### Backend
-- Python 3.11
-- AWS Lambda
-- Anthropic Claude Opus 4.5
-- DynamoDB
-- API Gateway (REST + WebSocket)
-- AWS Bedrock (fallback)
-
-### Frontend
-- React
-- TypeScript
-- Tailwind CSS
-- S3 + CloudFront
-
-### Infrastructure
-- AWS (us-east-1)
-- Secrets Manager
-- CloudWatch
-- IAM
-
-## Monitoring
-
-### CloudWatch Metrics
-- Lambda invocations and errors
-- API Gateway request count
-- DynamoDB read/write capacity
-- WebSocket connection count
-
-### Key Log Messages
-```
-Cache HIT for [engine] - DB query skipped (permanent cache)
-Cache MISS for [engine] - fetching from DB
-API Cost: $X.XXXXXX | input: X, output: X, cache_read: X, cache_write: X
-Permanently cached prompt for [engine]
-```
-
-### Cost Tracking
-AWS Cost Explorer with tag: `w1`
+**Tasks Completed:**
+1. Updated deploy-frontend.sh:
+   - Added correct MIME type for JavaScript files (application/javascript)
+   - Separated JS file upload with proper content-type header
+   - Updated header comments and output messages
+2. Updated config.sh with clear documentation
+3. Created this README.md with full change history
 
 ## Troubleshooting
 
-### Common Issues
+### JavaScript MIME Type Error
 
-1. **WebSocket not connecting**
-   - Check Lambda logs: `./monitor-logs.sh websocket`
-   - Verify API Gateway WebSocket stage is deployed
-   - Check connection table in DynamoDB
+If you see "Expected a JavaScript module script but the server responded with a MIME type of text/html":
 
-2. **AI responses not working**
-   - Check Anthropic API key in Secrets Manager (bodo-v1)
-   - Verify Lambda environment variables
-   - Check fallback to Bedrock is working
+1. Re-run deployment script which now sets correct MIME type
+2. Verify S3 file content-type: `aws s3api head-object --bucket bodo-frontend-20251204-230645dc --key assets/index-xxx.js`
+3. Invalidate CloudFront cache if needed
 
-3. **Frontend not updating**
-   - Run CloudFront cache invalidation
-   - Check S3 bucket sync
-   - Clear browser cache
+### Still Redirecting to Login
 
-4. **Prompt cache not working**
-   - Verify `ENABLE_PROMPT_CACHING=true`
-   - Check cache_control in API request
-   - Review Lambda logs for cache hit/miss
+1. Clear browser cache (Ctrl+Shift+R / Cmd+Shift+R)
+2. Try incognito mode
+3. Verify latest code is deployed:
+   ```bash
+   curl -s https://d2emwatb21j743.cloudfront.net/ | grep "index-"
+   ```
 
-### Rollback
+### CloudFront Cache Not Updating
+
 ```bash
-# Redeploy previous version
-git checkout <commit-hash> -- backend/
-cd w1-scripts && ./deploy-backend.sh
+aws cloudfront create-invalidation \
+    --distribution-id EDF1H6DB796US \
+    --paths "/*" \
+    --region ap-northeast-2
 ```
 
 ## Security Notes
-- **Safe Prefix**: Only modify w1-* resources
-- **Forbidden**: Never modify f1, p2, g2, b1 resources
-- **API Keys**: Managed via AWS Secrets Manager (bodo-v1)
-- **IAM Role**: w1-lambda-execution-role
 
-## Documentation
-- [Prompt Caching Optimization](PROMPT_CACHING_OPTIMIZATION.md)
+- **Backend is shared** - Changes to Lambda/DynamoDB affect both services
+- **Frontend is separate** - S3/CloudFront changes only affect this service
+- **No authentication** - This service has no login requirement (internal use only)
+- **API Keys** - Managed via AWS Secrets Manager (bodo-v1)
 
 ## License
+
 Proprietary - Seoul Economic Daily

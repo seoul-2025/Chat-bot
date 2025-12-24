@@ -1,7 +1,7 @@
-# Nexus Foreign - TWO (Internal Simplified Version)
+# Nexus Foreign - ONE (Internal Simplified Version)
 
 > **Last Updated**: 2025-12-24 (KST)
-> **URL**: https://d22634fcti3bhs.cloudfront.net
+> **URL**: https://d1zig3y52jaq1s.cloudfront.net
 > **Purpose**: Internal use (Direct chat without login/sidebar)
 
 ---
@@ -19,20 +19,20 @@
             ┌──────────────┴──────────────┐
             │                             │
      ┌──────┴──────┐              ┌───────┴─────┐
-     │    ONE      │              │    TWO      │  ◀── Current
+     │    ONE      │  ◀── Current │    TWO      │
      │ d1zig3y...  │              │ d22634f...  │
      └─────────────┘              └─────────────┘
 ```
 
 ---
 
-## Frontend Resources (TWO)
+## Frontend Resources (ONE)
 
 | Item | Value |
 |------|-------|
-| **CloudFront ID** | `E1Y608786VRTT5` |
-| **CloudFront URL** | `https://d22634fcti3bhs.cloudfront.net` |
-| **S3 Bucket** | `nexus-frontend-20251204224751` |
+| **CloudFront ID** | `E1O9OA8UA34Z49` |
+| **CloudFront URL** | `https://d1zig3y52jaq1s.cloudfront.net` |
+| **S3 Bucket** | `nexus-multi-frontend-20251204` |
 | **Region** | `ap-northeast-2` |
 
 ---
@@ -44,7 +44,7 @@
 ./deploy-f1-frontend.sh
 ```
 
-### Backend Deployment (Shared with ONE)
+### Backend Deployment (Shared with TWO)
 ```bash
 ./deploy-f1-backend.sh
 ```
@@ -56,19 +56,18 @@
 ### 2025-12-24 (KST)
 
 #### Phase 1: Project Cleanup
-- Removed unnecessary files from `one/` and `two/` directories
+- Removed unnecessary files from `one/` directory
 - Before: 53,198 files (~475MB) → After: 107 files (~8.7MB)
 - Deleted: `node_modules/`, `dist/`, `__pycache__/`, backup files, deployment logs
 
 #### Phase 2: Script Consolidation
 - Reduced deployment scripts from 9 to 2
 - Kept only: `deploy-f1-frontend.sh`, `deploy-f1-backend.sh`
-- Removed redundant scripts: `deploy.sh`, `deploy-anthropic.sh`, `deploy-f1-anthropic.sh`, `deploy-github-version.sh`, `deploy-service.sh`, `frontend/deploy-frontend.sh`, `frontend/deploy-new-s3-cloudfront.sh`
 
 #### Phase 3: Frontend Configuration Update
-- Updated `deploy-f1-frontend.sh` for TWO's CloudFront
-  - S3 Bucket: `nexus-frontend-20251204224751`
-  - CloudFront ID: `E1Y608786VRTT5`
+- Updated `deploy-f1-frontend.sh` for ONE's CloudFront
+  - S3 Bucket: `nexus-multi-frontend-20251204`
+  - CloudFront ID: `E1O9OA8UA34Z49`
   - Region: `ap-northeast-2`
 
 #### Phase 4: UI Simplification
@@ -77,12 +76,7 @@
 - All routes redirect to `/11` (English News → Korean Article)
 - Modified files: `frontend/src/App.jsx`
 
-#### Phase 5: Deployment & MIME Type Fix
-- Deployed to `https://d22634fcti3bhs.cloudfront.net`
-- Fixed MIME type issue (binary/octet-stream → application/javascript)
-- Re-uploaded JS/CSS/HTML files with correct Content-Type headers
-
-#### Phase 6: Documentation Update
+#### Phase 5: Documentation Update
 - Created this README.md with English documentation
 - Added phase-based changelog with Korean dates
 
@@ -118,7 +112,7 @@
 ## Project Structure
 
 ```
-two/
+one/foriegn/
 ├── README.md                  # This document
 ├── deploy-f1-frontend.sh      # Frontend deployment script
 ├── deploy-f1-backend.sh       # Backend deployment script
@@ -154,14 +148,14 @@ two/
 ### MIME Type Error
 ```bash
 # Re-upload JS files with correct content type
-aws s3 cp frontend/dist/ s3://nexus-frontend-20251204224751/ \
+aws s3 cp frontend/dist/ s3://nexus-multi-frontend-20251204/ \
   --recursive --exclude "*" --include "*.js" \
   --content-type "application/javascript" \
   --region ap-northeast-2
 
 # Invalidate cache
 aws cloudfront create-invalidation \
-  --distribution-id E1Y608786VRTT5 --paths "/*"
+  --distribution-id E1O9OA8UA34Z49 --paths "/*"
 ```
 
 ### Changes Not Reflecting
@@ -172,5 +166,5 @@ aws cloudfront create-invalidation \
 
 ## Related
 
-- `../one/` - ONE frontend (different CloudFront: d1zig3y52jaq1s.cloudfront.net)
+- `../../two/` - TWO frontend (different CloudFront: d22634fcti3bhs.cloudfront.net)
 - `F1_STACK_INFO.md` - Legacy backend stack documentation

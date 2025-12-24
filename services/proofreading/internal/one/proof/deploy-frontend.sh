@@ -1,5 +1,11 @@
 #!/bin/bash
 
+# ============================================
+# NX-WT-PRF Internal Frontend Deployment
+# Internal version - No login, No sidebar
+# Target: d1zig3y52jaq1s.cloudfront.net
+# ============================================
+
 # 색상 설정
 RED='\033[0;31m'
 GREEN='\033[0;32m'
@@ -12,28 +18,19 @@ echo -e "${BLUE}프론트엔드 CloudFront 배포 스크립트${NC}"
 echo -e "${BLUE}=================================${NC}"
 
 # 설정
-BUCKET_NAME="nx-prf-prod-frontend-2025"  # 실제 CloudFront Origin 버킷
-REGION="us-east-1"
+BUCKET_NAME="nexus-multi-frontend-20251204"  # 실제 CloudFront Origin 버킷
+REGION="ap-northeast-2"
 FRONTEND_DIR="./frontend"
-CLOUDFRONT_DISTRIBUTION_ID="E39OHKSWZD4F8J"  # p1.sedaily.ai CloudFront
+CLOUDFRONT_DISTRIBUTION_ID="E1O9OA8UA34Z49"  # d1zig3y52jaq1s.cloudfront.net
 
-# 1. S3 버킷 생성
-echo -e "\n${BLUE}1. S3 버킷 생성 중...${NC}"
-aws s3api head-bucket --bucket $BUCKET_NAME 2>/dev/null
+# 1. S3 버킷 확인
+echo -e "\n${BLUE}1. S3 버킷 확인 중...${NC}"
+aws s3api head-bucket --bucket $BUCKET_NAME --region $REGION 2>/dev/null
 if [ $? -ne 0 ]; then
-    aws s3api create-bucket \
-        --bucket $BUCKET_NAME \
-        --region $REGION \
-        --acl private
-
-    if [ $? -eq 0 ]; then
-        echo -e "${GREEN}✅ S3 버킷 생성 완료${NC}"
-    else
-        echo -e "${RED}❌ S3 버킷 생성 실패${NC}"
-        exit 1
-    fi
+    echo -e "${RED}❌ S3 버킷이 존재하지 않습니다: $BUCKET_NAME${NC}"
+    exit 1
 else
-    echo -e "${YELLOW}ℹ️  S3 버킷이 이미 존재합니다${NC}"
+    echo -e "${GREEN}✅ S3 버킷 확인 완료${NC}"
 fi
 
 # 2. S3 버킷 정적 웹사이트 호스팅 설정
@@ -116,7 +113,7 @@ echo -e "${GREEN}✅ 배포 완료!${NC}"
 echo -e "${BLUE}=================================${NC}"
 
 echo -e "\n${YELLOW}접속 정보:${NC}"
-echo -e "도메인: ${GREEN}https://p1.sedaily.ai${NC}"
+echo -e "도메인: ${GREEN}https://d1zig3y52jaq1s.cloudfront.net${NC}"
 echo -e "S3 버킷: ${GREEN}$BUCKET_NAME${NC}"
 echo -e "Distribution ID: ${GREEN}$CLOUDFRONT_DISTRIBUTION_ID${NC}"
 

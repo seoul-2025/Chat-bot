@@ -26,11 +26,7 @@ const LoginPage = lazy(() =>
   }))
 );
 const SignUpPage = lazy(() => import("./features/auth/components/SignUpPage"));
-const LandingPage = lazy(() =>
-  import("./features/landing/containers/LandingContainer").then((module) => ({
-    default: module.default,
-  }))
-);
+// LandingPage 제거 - 루트(/)는 /11로 리다이렉트
 const Sidebar = lazy(() => import("./shared/components/layout/Sidebar"));
 const Dashboard = lazy(() =>
   import("./features/dashboard/containers/DashboardContainer").then(
@@ -269,11 +265,8 @@ function AppContent() {
     navigate(`/${enginePath}/chat`);
   };
 
-  // 사이드바를 보여줄 페이지 확인 (랜딩, 로그인, 회원가입, 대시보드, 구독, 프로필 제외)
-  const showSidebar =
-    !["/", "/login", "/signup", "/subscription", "/profile"].includes(
-      location.pathname
-    ) && !location.pathname.includes("/dashboard");
+  // 사이드바 비활성화 - 모든 페이지에서 사이드바 숨김
+  const showSidebar = false;
 
   return (
     <div
@@ -314,15 +307,7 @@ function AppContent() {
             >
               <Route
                 path="/"
-                element={
-                  <PageTransition pageKey="landing">
-                    <LandingPage
-                      onSelectEngine={handleSelectEngine}
-                      onLogin={handleLogin}
-                      onLogout={handleLogout}
-                    />
-                  </PageTransition>
-                }
+                element={<Navigate to="/11" replace />}
               />
               <Route
                 path="/login"
@@ -355,8 +340,6 @@ function AppContent() {
                         onLogout={handleLogout}
                         onBackToLanding={handleBackToLanding}
                         onTitleUpdate={handleTitleUpdate}
-                        onToggleSidebar={toggleSidebar}
-                        isSidebarOpen={isSidebarOpen}
                         onNewConversation={handleNewConversation}
                         onDashboard={() => handleDashboard("11")}
                       />
@@ -376,8 +359,6 @@ function AppContent() {
                         onLogout={handleLogout}
                         onBackToLanding={handleBackToLanding}
                         onTitleUpdate={handleTitleUpdate}
-                        onToggleSidebar={toggleSidebar}
-                        isSidebarOpen={isSidebarOpen}
                         onNewConversation={handleNewConversation}
                         onDashboard={() => handleDashboard("22")}
                       />
@@ -398,8 +379,6 @@ function AppContent() {
                         onStartChat={handleStartChat}
                         onLogout={handleLogout}
                         onBackToLanding={handleBackToLanding}
-                        onToggleSidebar={toggleSidebar}
-                        isSidebarOpen={isSidebarOpen}
                         onDashboard={() => handleDashboard("11")}
                       />
                     </PageTransition>
@@ -419,8 +398,6 @@ function AppContent() {
                         onStartChat={handleStartChat}
                         onLogout={handleLogout}
                         onBackToLanding={handleBackToLanding}
-                        onToggleSidebar={toggleSidebar}
-                        isSidebarOpen={isSidebarOpen}
                         onDashboard={() => handleDashboard("22")}
                       />
                     </PageTransition>

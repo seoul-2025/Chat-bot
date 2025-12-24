@@ -1,101 +1,71 @@
-# b1.sedaily.ai (Internal)
-AI Press Release Assistant - Claude Opus 4.5 based real-time chat with web search
+# Buddy Internal
+AI Article Writing Assistant - Claude Opus 4.5 based real-time chat
 
 Last Updated: 2025-12-24
 
 ## Overview
-NX-P2-BUDDY Internal is the development/internal version of the AI-powered press release writing assistant for Seoul Economic Daily. Built on Anthropic Claude Opus 4.5 with real-time WebSocket streaming, native web search, and prompt caching for cost optimization.
+Internal version of AI press release writing assistant for Seoul Economic Daily.
+Uses the same backend as the external version (b1.sedaily.ai), but deploys to a separate CloudFront distribution.
 
-Production: https://b1.sedaily.ai
+**Internal Version Features:**
+- Login disabled (immediate access)
+- Sidebar disabled
+- No landing page (direct to `/11` chat)
 
-## Features
-- Real-time Chat: WebSocket-based streaming responses
-- Web Search: Anthropic's native web search integration (2025 data)
-- Prompt Caching: 81% cost reduction with Anthropic ephemeral cache
-- DynamoDB Caching: Permanent prompt cache in Lambda container
-- Multiple AI Providers: Anthropic API primary, Bedrock fallback
-- Dual Engine Support: Corporate (11) / Government (22) press release modes
-- Press Release Generation: Structured 5-step article creation workflow
+## URLs
+| Type | URL |
+|------|-----|
+| **Internal (this project)** | https://d3bwe2ohfohm85.cloudfront.net |
+| External (separate project) | https://b1.sedaily.ai |
 
-## Architecture
-```
-Frontend (React + Vite)
-  |
-CloudFront (CDN) -> b1.sedaily.ai
-  |
-S3 (Static Hosting)
+## one vs two Comparison
 
-WebSocket Flow:
-User -> API Gateway WebSocket -> Lambda (message handler)
-  |
-Anthropic Claude Opus 4.5 (with web search)
-  |
-Streaming Response -> User
+| Item | one (internal) | two (external) |
+|------|----------------|----------------|
+| CloudFront ID | EJX326D0QZ4T1 | E2WPOE6AL2G5DZ |
+| CloudFront URL | d3bwe2ohfohm85.cloudfront.net | b1.sedaily.ai |
+| S3 Bucket | buddy-frontend-202512042253 | p2-two-frontend |
+| Login | Disabled | Enabled |
+| Sidebar | Disabled | Enabled |
+| Landing Page | None (direct to /11) | Yes |
+| **Backend** | **Same** | **Same** |
 
-REST API Flow:
-User -> API Gateway REST -> Lambda (conversation/prompt/usage)
-  |
-DynamoDB (conversations, prompts, usage tracking)
-```
+## Deployment
 
-## Project Structure
-```
-.
-├── README.md
-├── deploy-p2-frontend.sh       # Frontend deployment script
-├── backend/
-│   ├── handlers/               # Lambda handlers (websocket)
-│   ├── lib/                    # AI clients (anthropic, bedrock, perplexity)
-│   ├── services/               # websocket_service
-│   ├── src/                    # Core business logic
-│   │   ├── models/
-│   │   ├── repositories/
-│   │   └── config/
-│   ├── utils/                  # Logger utilities
-│   └── requirements.txt
-└── frontend/
-    ├── src/
-    │   ├── features/           # auth, chat, dashboard, landing
-    │   ├── shared/
-    │   └── config.js
-    └── package.json
-```
-
-## Quick Start
-
-### Prerequisites
-- AWS CLI configured
-- Node.js 18+
-- Python 3.11+
-- AWS Account: 887078546492
-
-### Deployment
+### Frontend Deployment
 ```bash
-# Frontend only (S3 + CloudFront)
+# Run from project root
 ./deploy-p2-frontend.sh
 ```
 
-## Current Deployment
-Status: Production Ready
+The script automatically:
+1. Install dependencies (`npm install`)
+2. Build (`npm run build`)
+3. Upload to S3 (`buddy-frontend-202512042253`)
+4. Invalidate CloudFront cache (`EJX326D0QZ4T1`)
 
-Updated: 2025-12-24
+### Local Development
+```bash
+cd frontend
+npm install
+npm run dev
+# http://localhost:3000
+```
 
-## URLs
+## Shared Backend (one/two identical)
+
+### API Endpoints
 | Resource | URL |
 |----------|-----|
-| Primary Domain | https://b1.sedaily.ai |
-| CloudFront | https://dxiownvrignup.cloudfront.net |
 | REST API | https://pisnqqgu75.execute-api.us-east-1.amazonaws.com/prod |
 | WebSocket API | wss://dwc2m51as4.execute-api.us-east-1.amazonaws.com/prod |
-
-## AWS Resources (us-east-1)
 
 ### Lambda Functions
 | Function | Purpose |
 |----------|---------|
-| p2-two-websocket-connect-two | WebSocket connection handler |
-| p2-two-websocket-message-two | Main chat handler (Claude API) |
-| p2-two-websocket-disconnect-two | WebSocket disconnect handler |
+| p2-two-websocket-connect-two | WebSocket connection |
+| p2-two-websocket-message-two | Chat handler (Claude API) |
+| p2-two-websocket-disconnect-two | WebSocket disconnect |
 | p2-two-conversation-api-two | Conversation CRUD |
 | p2-two-prompt-crud-two | Prompt management |
 | p2-two-usage-handler-two | Usage tracking |
@@ -110,110 +80,101 @@ Updated: 2025-12-24
 | p2-two-usage-two | Usage statistics |
 | p2-two-websocket-connections-two | Active connections |
 
-### Other Resources
-| Resource | ID/Name |
-|----------|---------|
-| S3 Bucket | p2-two-frontend |
-| CloudFront Distribution | E2WPOE6AL2G5DZ |
-| Secrets Manager | buddy-v1 (Anthropic API key) |
+### Cognito (Shared)
+| Resource | Value |
+|----------|-------|
+| User Pool ID | us-east-1_ohLOswurY |
+| Client ID | 4m4edj8snokmhqnajhlj41h9n2 |
 
 ## AI Configuration
 | Setting | Value |
 |---------|-------|
-| Primary Provider | Anthropic API |
+| Provider | Anthropic API |
 | Model | claude-opus-4-5-20251101 |
 | Max Tokens | 4096 |
 | Temperature | 0.3 |
+| Web Search | Enabled |
 | Fallback | AWS Bedrock |
-| Web Search | Enabled (max 5 uses) |
 
-## Environment Configuration
-Lambda environment variables:
-```json
-{
-  "USE_ANTHROPIC_API": "true",
-  "ANTHROPIC_SECRET_NAME": "buddy-v1",
-  "ANTHROPIC_MODEL_ID": "claude-opus-4-5-20251101",
-  "SERVICE_NAME": "buddy",
-  "AI_PROVIDER": "anthropic_api",
-  "FALLBACK_TO_BEDROCK": "true",
-  "ENABLE_NATIVE_WEB_SEARCH": "true",
-  "MAX_TOKENS": "4096",
-  "TEMPERATURE": "0.3"
-}
+## Project Structure
 ```
-
-## Log Monitoring
-```bash
-# Real-time Lambda logs
-aws logs tail /aws/lambda/p2-two-websocket-message-two --follow --region us-east-1
-
-# Check cache status
-aws logs tail /aws/lambda/p2-two-websocket-message-two --since 5m --region us-east-1 | grep -E "cache|Cache"
-
-# Check deployment
-aws lambda get-function --function-name p2-two-websocket-message-two --query 'Configuration.LastModified'
+.
+├── README.md                   # This file
+├── deploy-p2-frontend.sh       # Frontend deployment script
+├── backend/
+│   ├── handlers/               # Lambda handlers
+│   ├── lib/                    # AI clients
+│   ├── services/               # websocket_service
+│   └── src/                    # Core logic
+└── frontend/
+    ├── src/
+    │   ├── features/           # auth, chat, dashboard
+    │   └── shared/             # Common components
+    ├── .env                    # Environment variables
+    └── package.json
 ```
-
-## Cost Optimization
-
-### Anthropic Prompt Caching (81% savings)
-- System prompt (~27,925 tokens) cached with Anthropic ephemeral cache
-- Cache TTL: 1 hour (Anthropic managed)
-- Cache MISS: ~$0.155/request (first request creates cache)
-- Cache HIT: ~$0.029/request (subsequent requests)
-
-### Pricing (Claude Opus 4.5)
-| Token Type | Price per 1M tokens |
-|------------|---------------------|
-| Input | $5.00 |
-| Output | $25.00 |
-| Cache Write | $10.00 |
-| Cache Read | $0.50 (90% off) |
-
-## Tech Stack
-
-### Backend
-- Python 3.11
-- AWS Lambda
-- Anthropic Claude Opus 4.5
-- DynamoDB
-- API Gateway (REST + WebSocket)
-- Secrets Manager
-
-### Frontend
-- React 18.2
-- Vite 4.4
-- Tailwind CSS 3.3
-- Framer Motion
-- S3 + CloudFront
 
 ## Troubleshooting
 
-### Common Issues
+### Changes not visible after deployment
+Wait for CloudFront cache invalidation (2-3 minutes)
+```bash
+aws cloudfront create-invalidation --distribution-id EJX326D0QZ4T1 --paths "/*"
+```
 
-1. **WebSocket not connecting**
-   - Check Lambda logs for errors
-   - Verify API Gateway WebSocket stage is deployed
-   ```bash
-   wscat -c wss://dwc2m51as4.execute-api.us-east-1.amazonaws.com/prod
-   ```
+### Check Lambda logs
+```bash
+aws logs tail /aws/lambda/p2-two-websocket-message-two --follow --region us-east-1
+```
 
-2. **AI responses not working**
-   - Check Anthropic API key in Secrets Manager (`buddy-v1`)
-   - Verify Lambda environment variables
-   ```bash
-   aws lambda get-function-configuration --function-name p2-two-websocket-message-two
-   ```
+---
 
-3. **Frontend not updating**
-   - Run CloudFront cache invalidation
-   ```bash
-   aws cloudfront create-invalidation --distribution-id E2WPOE6AL2G5DZ --paths "/*"
-   ```
+## Changelog
+
+### Phase 1: Initial Setup (2025-12-24)
+**Date:** 2025-12-24 (KST)
+
+**Work Completed:**
+1. **Project Structure Setup**
+   - Copied frontend/backend code from `external/two` as base
+   - Configured separate CloudFront distribution for internal use
+
+2. **Frontend AWS Resources Configuration**
+   - S3 Bucket: `buddy-frontend-202512042253`
+   - CloudFront ID: `EJX326D0QZ4T1`
+   - CloudFront URL: `https://d3bwe2ohfohm85.cloudfront.net`
+
+3. **Frontend Code Modifications**
+   - `App.jsx`: Removed landing page, redirect `/` to `/11`
+   - `App.jsx`: Disabled sidebar (`showSidebar = false`)
+   - `App.jsx`: Removed `onToggleSidebar`, `isSidebarOpen` props from ChatPage and MainContent
+   - `ProtectedRoute.jsx`: Disabled login check (all users pass through)
+   - `Header.jsx`: Removed login/logout UI
+
+4. **Deployment Script**
+   - `deploy-p2-frontend.sh`: Updated with correct S3 bucket and CloudFront ID
+
+5. **Environment Configuration**
+   - `frontend/.env`: Synced API endpoints from external/two
+   - Added `VITE_CLOUDFRONT_DOMAIN=d3bwe2ohfohm85.cloudfront.net`
+
+6. **First Deployment**
+   - Successfully deployed to https://d3bwe2ohfohm85.cloudfront.net
+   - Cache invalidation ID: `IU8XSTYPJYSJTL97YWCX5M6JC`
+
+**Files Modified:**
+- `frontend/src/App.jsx`
+- `frontend/src/features/auth/components/ProtectedRoute.jsx`
+- `frontend/src/shared/components/layout/Header.jsx`
+- `frontend/.env`
+- `deploy-p2-frontend.sh`
+- `README.md`
+
+---
 
 ## Related
-- Production version: `/buddy/external/two/`
+- External version: `/buddy/external/two/`
+- Sync backend code from external/two when needed
 
 ## License
 Proprietary - Seoul Economic Daily

@@ -11,7 +11,7 @@ const MainContent = lazy(() => import("./features/dashboard/components/MainConte
 const ChatPage = lazy(() => import("./features/chat/containers/ChatPageContainer"));
 const LoginPage = lazy(() => import("./features/auth/containers/LoginContainer").then(module => ({ default: module.default })));
 const SignUpPage = lazy(() => import("./features/auth/components/SignUpPage"));
-const LandingPage = lazy(() => import("./features/landing/containers/LandingContainer").then(module => ({ default: module.default })));
+// LandingPage 제거됨 - "/" 접속 시 바로 /11로 리다이렉트
 const Sidebar = lazy(() => import("./shared/components/layout/Sidebar"));
 const Dashboard = lazy(() => import("./features/dashboard/containers/DashboardContainer").then(module => ({ default: module.default })));
 const SubscriptionPage = lazy(() => import("./features/subscription/components/SubscriptionPage"));
@@ -141,13 +141,9 @@ function AppContent() {
     // Header에 사용자 정보 업데이트 알림
     window.dispatchEvent(new CustomEvent('userInfoUpdated'));
     
-    // 현재 페이지가 랜딩 페이지가 아닌 경우에만 랜딩 페이지로 이동
-    if (location.pathname !== '/') {
-      console.log('📍 랜딩 페이지로 이동');
-      navigate("/");
-    } else {
-      console.log('📍 현재 랜딩 페이지 유지');
-    }
+    // 로그아웃 후 로그인 페이지로 이동
+    console.log('📍 로그인 페이지로 이동');
+    navigate("/login");
   };
 
   const handleLogin = (role = "user") => {
@@ -195,7 +191,7 @@ function AppContent() {
   };
 
   const handleBackToLanding = () => {
-    navigate("/");
+    navigate("/11");
   };
 
   const handleTitleUpdate = (newTitle) => {
@@ -227,8 +223,8 @@ function AppContent() {
     navigate(`/${enginePath}/chat`);
   };
 
-  // 사이드바를 보여줄 페이지 확인 (랜딩, 로그인, 회원가입, 대시보드, 구독, 프로필 제외)
-  const showSidebar = !['/', '/login', '/signup', '/subscription', '/profile'].includes(location.pathname) && !location.pathname.includes('/dashboard');
+  // 사이드바 비활성화
+  const showSidebar = false;
 
   return (
     <div
@@ -263,17 +259,10 @@ function AppContent() {
         <AnimatePresence mode="wait">
           <Suspense fallback={<LoadingSpinner />}>
             <Routes location={location} key={location.pathname.split('/').slice(0, 3).join('/')}>
-              <Route 
-                path="/" 
-                element={
-                  <PageTransition pageKey="landing">
-                    <LandingPage
-                      onSelectEngine={handleSelectEngine}
-                      onLogin={handleLogin}
-                      onLogout={handleLogout}
-                    />
-                  </PageTransition>
-                } 
+              {/* "/" 접속 시 바로 /11로 리다이렉트 (랜딩페이지 제거) */}
+              <Route
+                path="/"
+                element={<Navigate to="/11" replace />}
               />
           <Route 
             path="/login" 
@@ -297,85 +286,77 @@ function AppContent() {
             <Route
               path="/11/chat/:conversationId?"
               element={
-                <ProtectedRoute>
-                  <PageTransition pageKey="chat-basic">
-                    <ChatPage
-                      initialMessage={location.state?.initialMessage}
-                      userRole={userRole}
-                      selectedEngine="Basic"
-                      onLogout={handleLogout}
-                      onBackToLanding={handleBackToLanding}
-                      onTitleUpdate={handleTitleUpdate}
-                      onToggleSidebar={toggleSidebar}
-                      isSidebarOpen={isSidebarOpen}
-                      onNewConversation={handleNewConversation}
-                      onDashboard={() => handleDashboard("Basic")}
-                    />
-                  </PageTransition>
-                </ProtectedRoute>
+                <PageTransition pageKey="chat-basic">
+                  <ChatPage
+                    initialMessage={location.state?.initialMessage}
+                    userRole={userRole}
+                    selectedEngine="Basic"
+                    onLogout={handleLogout}
+                    onBackToLanding={handleBackToLanding}
+                    onTitleUpdate={handleTitleUpdate}
+                    onToggleSidebar={toggleSidebar}
+                    isSidebarOpen={isSidebarOpen}
+                    onNewConversation={handleNewConversation}
+                    onDashboard={() => handleDashboard("Basic")}
+                  />
+                </PageTransition>
               }
             />
             <Route
               path="/22/chat/:conversationId?"
               element={
-                <ProtectedRoute>
-                  <PageTransition pageKey="chat-pro">
-                    <ChatPage
-                      initialMessage={location.state?.initialMessage}
-                      userRole={userRole}
-                      selectedEngine="Pro"
-                      onLogout={handleLogout}
-                      onBackToLanding={handleBackToLanding}
-                      onTitleUpdate={handleTitleUpdate}
-                      onToggleSidebar={toggleSidebar}
-                      isSidebarOpen={isSidebarOpen}
-                      onNewConversation={handleNewConversation}
-                      onDashboard={() => handleDashboard("Pro")}
-                    />
-                  </PageTransition>
-                </ProtectedRoute>
+                <PageTransition pageKey="chat-pro">
+                  <ChatPage
+                    initialMessage={location.state?.initialMessage}
+                    userRole={userRole}
+                    selectedEngine="Pro"
+                    onLogout={handleLogout}
+                    onBackToLanding={handleBackToLanding}
+                    onTitleUpdate={handleTitleUpdate}
+                    onToggleSidebar={toggleSidebar}
+                    isSidebarOpen={isSidebarOpen}
+                    onNewConversation={handleNewConversation}
+                    onDashboard={() => handleDashboard("Pro")}
+                  />
+                </PageTransition>
               }
             />
             <Route
               path="/11"
               element={
-                <ProtectedRoute>
-                  <PageTransition pageKey="main-basic">
-                    <MainContent
-                      project={currentProject}
-                      userRole={userRole}
-                      selectedEngine="Basic"
-                      onToggleStar={toggleStar}
-                      onStartChat={handleStartChat}
-                      onLogout={handleLogout}
-                      onBackToLanding={handleBackToLanding}
-                      onToggleSidebar={toggleSidebar}
-                      isSidebarOpen={isSidebarOpen}
-                      onDashboard={() => handleDashboard("Basic")}
-                    />
-                  </PageTransition>
-                </ProtectedRoute>
+                <PageTransition pageKey="main-basic">
+                  <MainContent
+                    project={currentProject}
+                    userRole={userRole}
+                    selectedEngine="Basic"
+                    onToggleStar={toggleStar}
+                    onStartChat={handleStartChat}
+                    onLogout={handleLogout}
+                    onBackToLanding={handleBackToLanding}
+                    onToggleSidebar={toggleSidebar}
+                    isSidebarOpen={isSidebarOpen}
+                    onDashboard={() => handleDashboard("Basic")}
+                  />
+                </PageTransition>
               }
             />
             <Route
               path="/22"
               element={
-                <ProtectedRoute>
-                  <PageTransition pageKey="main-pro">
-                    <MainContent
-                      project={currentProject}
-                      userRole={userRole}
-                      selectedEngine="Pro"
-                      onToggleStar={toggleStar}
-                      onStartChat={handleStartChat}
-                      onLogout={handleLogout}
-                      onBackToLanding={handleBackToLanding}
-                      onToggleSidebar={toggleSidebar}
-                      isSidebarOpen={isSidebarOpen}
-                      onDashboard={() => handleDashboard("Pro")}
-                    />
-                  </PageTransition>
-                </ProtectedRoute>
+                <PageTransition pageKey="main-pro">
+                  <MainContent
+                    project={currentProject}
+                    userRole={userRole}
+                    selectedEngine="Pro"
+                    onToggleStar={toggleStar}
+                    onStartChat={handleStartChat}
+                    onLogout={handleLogout}
+                    onBackToLanding={handleBackToLanding}
+                    onToggleSidebar={toggleSidebar}
+                    isSidebarOpen={isSidebarOpen}
+                    onDashboard={() => handleDashboard("Pro")}
+                  />
+                </PageTransition>
               }
             />
             <Route
