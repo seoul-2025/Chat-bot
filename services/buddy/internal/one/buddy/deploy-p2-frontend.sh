@@ -1,18 +1,18 @@
 #!/bin/bash
 
-# nexus-template-p2 프론트엔드 배포 스크립트
-# CloudFront: E2WPOE6AL2G5DZ
-# S3 Bucket: p2-two-frontend
+# Buddy Internal 프론트엔드 배포 스크립트
+# CloudFront: EJX326D0QZ4T1
+# S3 Bucket: buddy-frontend-202512042253
 
 set -e
 
-echo "🚀 nexus-template-p2 프론트엔드 배포 시작..."
+echo "🚀 Buddy Internal 프론트엔드 배포 시작..."
 echo "📅 배포 시각: $(date '+%Y-%m-%d %H:%M:%S')"
 echo ""
 
 # 설정
-S3_BUCKET="p2-two-frontend"
-CLOUDFRONT_ID="E2WPOE6AL2G5DZ"
+S3_BUCKET="buddy-frontend-202512042253"
+CLOUDFRONT_ID="EJX326D0QZ4T1"
 REGION="us-east-1"
 
 # frontend 디렉토리로 이동

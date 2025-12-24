@@ -1,18 +1,25 @@
 #!/bin/bash
 
-# f1.sedaily.ai 프론트엔드 배포 스크립트
+# ============================================
+# Nexus Foreign - TWO Frontend Deployment
+# ============================================
+# Last Updated: 2025-12-24 (KST)
+# Target: https://d22634fcti3bhs.cloudfront.net
+# Backend: Shared f1-two stack (us-east-1)
+# ============================================
+
 set -e
 
-# 설정
-STACK_NAME="f1"
-S3_BUCKET="f1-two-frontend"
-REGION="us-east-1"
-DISTRIBUTION_ID="E1HNX1UP39MOOM"
-CLOUDFRONT_DOMAIN="drbxxcxyi7jpk.cloudfront.net"
-CUSTOM_DOMAIN="f1.sedaily.ai"
+# Configuration
+STACK_NAME="nexus-foreign"
+S3_BUCKET="nexus-frontend-20251204224751"
+REGION="ap-northeast-2"
+DISTRIBUTION_ID="E1Y608786VRTT5"
+CLOUDFRONT_DOMAIN="d22634fcti3bhs.cloudfront.net"
+CUSTOM_DOMAIN="d22634fcti3bhs.cloudfront.net"
 
 echo "========================================="
-echo "   f1.sedaily.ai 프론트엔드 배포"
+echo "   Nexus Foreign - TWO Deployment"
 echo "========================================="
 echo ""
 echo "스택: ${STACK_NAME}"
@@ -46,17 +53,32 @@ fi
 
 echo "✅ 프론트엔드 빌드 완료"
 
-# 2. S3에 업로드
+# 2. S3에 업로드 (with correct MIME types)
 echo ""
 echo "📤 S3에 파일 업로드 중..."
-aws s3 sync dist/ "s3://${S3_BUCKET}/" --delete --region ${REGION}
+
+# Upload with correct content types to prevent MIME type errors
+aws s3 sync dist/ "s3://${S3_BUCKET}/" --delete --region ${REGION} \
+    --exclude "*.js" --exclude "*.css" --exclude "*.html"
+
+# Upload JS files with correct MIME type
+aws s3 cp dist/ "s3://${S3_BUCKET}/" --recursive --region ${REGION} \
+    --exclude "*" --include "*.js" --content-type "application/javascript"
+
+# Upload CSS files with correct MIME type
+aws s3 cp dist/ "s3://${S3_BUCKET}/" --recursive --region ${REGION} \
+    --exclude "*" --include "*.css" --content-type "text/css"
+
+# Upload HTML files with correct MIME type
+aws s3 cp dist/ "s3://${S3_BUCKET}/" --recursive --region ${REGION} \
+    --exclude "*" --include "*.html" --content-type "text/html"
 
 if [ $? -ne 0 ]; then
     echo "❌ S3 업로드 실패"
     exit 1
 fi
 
-echo "✅ S3 업로드 완료"
+echo "✅ S3 업로드 완료 (MIME types applied)"
 
 # 3. CloudFront 캐시 무효화
 echo ""

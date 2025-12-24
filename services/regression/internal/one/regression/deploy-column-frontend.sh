@@ -1,26 +1,27 @@
 #!/bin/bash
 
-# sedaily_column 프론트엔드 배포 스크립트
-# CloudFront: EH9OF7IFDTPLW
-# S3 Bucket: sedaily-column-frontend
+# 프론트엔드 배포 스크립트
+# CloudFront: E1Y608786VRTT5
+# S3 Bucket: nexus-frontend-20251204224751
 
 set -e
 
-echo "🚀 sedaily_column 프론트엔드 배포 시작..."
+echo "🚀 프론트엔드 배포 시작..."
 echo "📅 배포 시각: $(date '+%Y-%m-%d %H:%M:%S')"
 echo ""
 
 # 설정
-S3_BUCKET="sedaily-column-frontend"
-CLOUDFRONT_ID="EH9OF7IFDTPLW"
-REGION="us-east-1"
+S3_BUCKET="sedaily-column-frontend-1764856283"
+CLOUDFRONT_ID="E2Y96Q11K5DVPS"
+REGION="ap-northeast-2"
 
-# 현재 디렉토리 확인
-CURRENT_DIR=$(pwd)
-if [[ ! "$CURRENT_DIR" == *"sedaily_ column"* ]]; then
-    echo "❌ sedaily_column 프로젝트 디렉토리에서 실행해주세요."
+# frontend 디렉토리 존재 확인
+SCRIPT_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
+if [[ ! -d "$SCRIPT_DIR/frontend" ]]; then
+    echo "❌ frontend 디렉토리를 찾을 수 없습니다."
     exit 1
 fi
+cd "$SCRIPT_DIR"
 
 # frontend 디렉토리로 이동
 cd frontend

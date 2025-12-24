@@ -297,16 +297,7 @@ const Header = ({
                   </div>
                 )}
               </div>
-            ) : (
-              // 로그아웃 상태일 때 로그인 버튼 표시
-              <button
-                onClick={() => window.location.href = '/login'}
-                className="flex items-center space-x-2 px-4 py-2 bg-accent-main-000 text-white rounded-lg hover:bg-accent-main-100 transition-colors duration-200 font-medium text-sm"
-              >
-                <LogOut size={16} className="rotate-180" />
-                <span>로그인</span>
-              </button>
-            )}
+            ) : null}
           </div>
         </div>
       </div>

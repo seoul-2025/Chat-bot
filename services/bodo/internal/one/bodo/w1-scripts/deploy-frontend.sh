@@ -1,13 +1,22 @@
 #!/bin/bash
-# Deploy Frontend to W1.SEDAILY.AI
-# =================================
+# ============================================================
+# Deploy Frontend - BODO Internal Service
+# ============================================================
+# Deploys React frontend to S3 and invalidates CloudFront cache
+# This is for internal/one service (no login, no sidebar)
+#
+# Usage: ./deploy-frontend.sh [-y]
+#   -y : Auto-confirm deployment
+#
+# Last Updated: 2025-12-24
+# ============================================================
 
 set -e
 source "$(dirname "$0")/config.sh"
 
 echo "========================================="
-echo "   W1 Frontend Deployment"
-echo "   Target: https://w1.sedaily.ai"
+echo "   BODO Internal Frontend Deployment"
+echo "   Target: https://${DOMAIN}"
 echo "========================================="
 
 # Step 1: Build frontend
@@ -37,25 +46,26 @@ build_frontend() {
 # Step 2: Deploy to S3
 deploy_to_s3() {
     log_info "Deploying to S3..."
-    
-    # Sync dist folder to S3
+
+    # Upload non-JS files first
+    log_info "Uploading HTML, CSS, images..."
     aws s3 sync "$FRONTEND_DIR/dist" \
         "s3://${FRONTEND_BUCKET}" \
         --delete \
+        --exclude "*.js" \
         --region "${AWS_REGION}" \
         --cache-control "public, max-age=3600"
-    
-    # Set specific cache for static assets
-    aws s3 cp "s3://${FRONTEND_BUCKET}" \
-        "s3://${FRONTEND_BUCKET}" \
-        --recursive \
-        --exclude "*" \
-        --include "*.js" \
-        --include "*.css" \
-        --metadata-directive REPLACE \
-        --cache-control "public, max-age=31536000" \
-        --region "${AWS_REGION}" > /dev/null 2>&1
-    
+
+    # Upload JS files with correct MIME type (application/javascript)
+    log_info "Uploading JavaScript files with correct MIME type..."
+    find "$FRONTEND_DIR/dist" -name "*.js" | while read -r jsfile; do
+        relpath="${jsfile#$FRONTEND_DIR/dist/}"
+        aws s3 cp "$jsfile" "s3://${FRONTEND_BUCKET}/$relpath" \
+            --content-type "application/javascript" \
+            --cache-control "public, max-age=31536000" \
+            --region "${AWS_REGION}" > /dev/null 2>&1
+    done
+
     log_info "S3 deployment complete"
 }
 
@@ -126,13 +136,13 @@ main() {
     
     echo ""
     echo "========================================="
-    echo "✅ W1 Frontend Deployment Complete!"
+    echo "✅ BODO Internal Frontend Deployment Complete!"
     echo "========================================="
     echo ""
     echo "Access the site: https://${DOMAIN}"
     echo ""
     echo "Note: CloudFront cache invalidation in progress."
-    echo "Full update may take 5-10 minutes."
+    echo "Full update may take 1-2 minutes."
 }
 
 main "$@"

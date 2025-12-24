@@ -11,7 +11,8 @@ const MainContent = lazy(() => import("./features/dashboard/components/MainConte
 const ChatPage = lazy(() => import("./features/chat/containers/ChatPageContainer"));
 const LoginPage = lazy(() => import("./features/auth/containers/LoginContainer").then(module => ({ default: module.default })));
 const SignUpPage = lazy(() => import("./features/auth/components/SignUpPage"));
-const LandingPage = lazy(() => import("./features/landing/containers/LandingContainer").then(module => ({ default: module.default })));
+// LandingPage 비활성화
+// const LandingPage = lazy(() => import("./features/landing/containers/LandingContainer").then(module => ({ default: module.default })));
 const Sidebar = lazy(() => import("./shared/components/layout/Sidebar"));
 const Dashboard = lazy(() => import("./features/dashboard/containers/DashboardContainer").then(module => ({ default: module.default })));
 const SubscriptionPage = lazy(() => import("./features/subscription/components/SubscriptionPage"));
@@ -136,13 +137,9 @@ function AppContent() {
     // Header에 사용자 정보 업데이트 알림
     window.dispatchEvent(new CustomEvent('userInfoUpdated'));
     
-    // 현재 페이지가 랜딩 페이지가 아닌 경우에만 랜딩 페이지로 이동
-    if (location.pathname !== '/') {
-      console.log('📍 랜딩 페이지로 이동');
-      navigate("/");
-    } else {
-      console.log('📍 현재 랜딩 페이지 유지');
-    }
+    // 로그아웃 후 /11로 이동
+    console.log('📍 /11로 이동');
+    navigate("/11");
   };
 
   const handleLogin = (role = "user") => {
@@ -152,14 +149,9 @@ function AppContent() {
     const engine = location.state?.engine || selectedEngine;
     setSelectedEngine(engine);
 
-    // 엔진이 선택된 상태에서 로그인했다면 해당 엔진 페이지로 이동
-    if (location.state?.engine) {
-      const enginePath = engine.toLowerCase();
-      navigate(`/${enginePath}`);
-    } else {
-      // 엔진이 선택되지 않은 상태(헤더 로그인 버튼 등)에서는 랜딩 페이지로 이동
-      navigate("/");
-    }
+    // 로그인 후 /11로 이동
+    const enginePath = engine.toLowerCase();
+    navigate(`/${enginePath}`);
   };
 
   const handleSelectEngine = (engine) => {
@@ -190,7 +182,7 @@ function AppContent() {
   };
 
   const handleBackToLanding = () => {
-    navigate("/");
+    navigate("/11");
   };
 
   const handleTitleUpdate = (newTitle) => {
@@ -258,18 +250,8 @@ function AppContent() {
         <AnimatePresence mode="wait">
           <Suspense fallback={<LoadingSpinner />}>
             <Routes location={location} key={location.pathname.split('/').slice(0, 3).join('/')}>
-              <Route 
-                path="/" 
-                element={
-                  <PageTransition pageKey="landing">
-                    <LandingPage
-                      onSelectEngine={handleSelectEngine}
-                      onLogin={handleLogin}
-                      onLogout={handleLogout}
-                    />
-                  </PageTransition>
-                } 
-              />
+              {/* 랜딩페이지 제거 - 바로 /11로 리다이렉트 */}
+              <Route path="/" element={<Navigate to="/11" replace />} />
           {/* 로그인 페이지 비활성화 - 랜딩으로 리다이렉트 */}
           <Route 
             path="/login" 

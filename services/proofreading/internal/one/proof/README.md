@@ -1,21 +1,30 @@
-# p1.sedaily.ai
-AI Proofreading Service - Claude Opus 4.5 based real-time proofreading with web search
+# NX-WT-PRF Internal
+AI Proofreading Service - Simplified Internal Version (No Login Required)
 
-Last Updated: 2025-12-21
+Last Updated: 2025-12-24
 
 ## Overview
-NX-WT-PRF is an AI-powered proofreading and title generation service for Seoul Economic Daily. Built on Anthropic Claude Opus 4.5 with real-time WebSocket streaming, native web search, and prompt caching for cost optimization.
+Internal employee version of Seoul Economic Daily's AI proofreading service. Uses the same backend as the external version (p1.sedaily.ai) but with a simplified UI - no login, no sidebar, direct access to chat.
 
-Live: https://p1.sedaily.ai
+**Live:** https://d1zig3y52jaq1s.cloudfront.net
+
+## Internal vs External Comparison
+| Feature | Internal (this project) | External (external/two) |
+|---------|------------------------|-------------------------|
+| Login | ❌ None | ✅ Cognito Auth |
+| Sidebar | ❌ None | ✅ Enabled |
+| Landing Page | ❌ None (direct to /11) | ✅ Enabled |
+| Domain | d1zig3y52jaq1s.cloudfront.net | p1.sedaily.ai |
+| S3 Bucket | nexus-multi-frontend-20251204 | nx-prf-prod-frontend-2025 |
+| Region | ap-northeast-2 (Seoul) | us-east-1 (Virginia) |
+| **Backend** | **Shared (Same)** | **Shared (Same)** |
 
 ## Features
 - Real-time Chat: WebSocket-based streaming responses
 - Web Search: Anthropic's native web search integration (2025 data)
 - **Prompt Caching: 92% cost reduction with Anthropic ephemeral cache** ✅
-- DynamoDB Caching: Permanent prompt cache in Lambda container
-- Multiple AI Providers: Anthropic API primary, Bedrock fallback
-- Systematic Prompt: 11-section structured prompt for consistent quality
-- Multiple Engines: Basic/Pro engine support
+- No login required - direct access
+- Simplified UI (no sidebar, no landing page)
 
 ## Architecture
 ```
@@ -95,10 +104,10 @@ Updated: 2025-12-21
 ## URLs
 | Resource | URL |
 |----------|-----|
-| Primary Domain | https://p1.sedaily.ai |
-| CloudFront | https://d1tas3e2v5373v.cloudfront.net |
-| REST API | https://wxwdb89w4m.execute-api.us-east-1.amazonaws.com/prod |
-| WebSocket API | wss://p062xh167h.execute-api.us-east-1.amazonaws.com/prod |
+| **Internal Domain** | https://d1zig3y52jaq1s.cloudfront.net |
+| External Domain | https://p1.sedaily.ai (see external/two) |
+| REST API (shared) | https://wxwdb89w4m.execute-api.us-east-1.amazonaws.com/prod |
+| WebSocket API (shared) | wss://p062xh167h.execute-api.us-east-1.amazonaws.com/prod |
 
 ## AWS Resources (us-east-1)
 
@@ -122,12 +131,18 @@ Updated: 2025-12-21
 | nx-wt-prf-usage-tracking | Detailed tracking |
 | nx-wt-prf-websocket-connections | Active connections |
 
-### Other Resources
+### Frontend Resources (Internal - ap-northeast-2)
 | Resource | ID/Name |
 |----------|---------|
-| S3 Bucket | nx-prf-prod-frontend-2025 |
-| CloudFront Distribution | E39OHKSWZD4F8J (p1.sedaily.ai) |
+| S3 Bucket | nexus-multi-frontend-20251204 |
+| CloudFront Distribution | E1O9OA8UA34Z49 |
+| Domain | d1zig3y52jaq1s.cloudfront.net |
+
+### Shared Resources (us-east-1)
+| Resource | ID/Name |
+|----------|---------|
 | Secrets Manager | proof-v1 (Anthropic API key) |
+| Cognito User Pool | us-east-1_ohLOswurY (not used in internal) |
 
 ## AI Configuration
 | Setting | Value |
@@ -140,6 +155,20 @@ Updated: 2025-12-21
 | Web Search | Enabled (max 5 uses) |
 
 ## Change History
+
+### Phase 9: Internal Version Setup (2025-12-24)
+- **Created internal-only version** for Seoul Economic Daily employees
+- Removed login requirement (ProtectedRoute disabled)
+- Removed sidebar (showSidebar = false)
+- Removed landing page (/ redirects to /11 directly)
+- Removed login button from Header
+- Deployed to new CloudFront distribution:
+  - S3: `nexus-multi-frontend-20251204` (ap-northeast-2)
+  - CloudFront: `E1O9OA8UA34Z49`
+  - Domain: `d1zig3y52jaq1s.cloudfront.net`
+- Updated `deploy-frontend.sh` with internal CloudFront settings
+- Updated README.md to reflect internal version differences
+- Backend remains shared with external version (p1.sedaily.ai)
 
 ### Phase 8: Final Testing & Deployment Verification (2025-12-21)
 - **Production deployment verified** - All components tested and working

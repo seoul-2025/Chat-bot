@@ -1,5 +1,11 @@
 #!/bin/bash
 
+# ============================================
+# NX-WT-PRF External Frontend Deployment
+# External version - Full features with login
+# Target: p1.sedaily.ai
+# ============================================
+
 # 색상 설정
 RED='\033[0;31m'
 GREEN='\033[0;32m'

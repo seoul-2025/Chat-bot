@@ -1,20 +1,31 @@
-# p1.sedaily.ai
-AI Proofreading Service - Claude Opus 4.5 based real-time proofreading with web search
+# NX-WT-PRF External (p1.sedaily.ai)
+AI Proofreading Service - Full-featured External Version with Authentication
 
-Last Updated: 2025-12-21
+Last Updated: 2025-12-24
 
 ## Overview
-NX-WT-PRF is an AI-powered proofreading and title generation service for Seoul Economic Daily. Built on Anthropic Claude Opus 4.5 with real-time WebSocket streaming, native web search, and prompt caching for cost optimization.
+External public version of Seoul Economic Daily's AI proofreading service. Full-featured with Cognito authentication, sidebar navigation, and landing page.
 
-Live: https://p1.sedaily.ai
+**Live:** https://p1.sedaily.ai
+
+## External vs Internal Comparison
+| Feature | External (this project) | Internal (internal/one) |
+|---------|------------------------|-------------------------|
+| Login | ✅ Cognito Auth | ❌ None |
+| Sidebar | ✅ Enabled | ❌ None |
+| Landing Page | ✅ Enabled | ❌ None (direct to /11) |
+| Domain | p1.sedaily.ai | d1zig3y52jaq1s.cloudfront.net |
+| S3 Bucket | nx-prf-prod-frontend-2025 | nexus-multi-frontend-20251204 |
+| Region | us-east-1 (Virginia) | ap-northeast-2 (Seoul) |
+| **Backend** | **Shared (Same)** | **Shared (Same)** |
 
 ## Features
 - Real-time Chat: WebSocket-based streaming responses
 - Web Search: Anthropic's native web search integration (2025 data)
 - **Prompt Caching: 92% cost reduction with Anthropic ephemeral cache** ✅
-- DynamoDB Caching: Permanent prompt cache in Lambda container
-- Multiple AI Providers: Anthropic API primary, Bedrock fallback
-- Systematic Prompt: 11-section structured prompt for consistent quality
+- Cognito Authentication: User login/signup
+- Sidebar Navigation: Conversation history
+- Landing Page: Engine selection (Basic/Pro)
 - Multiple Engines: Basic/Pro engine support
 
 ## Architecture
@@ -122,12 +133,18 @@ Updated: 2025-12-21
 | nx-wt-prf-usage-tracking | Detailed tracking |
 | nx-wt-prf-websocket-connections | Active connections |
 
-### Other Resources
+### Frontend Resources (External - us-east-1)
 | Resource | ID/Name |
 |----------|---------|
 | S3 Bucket | nx-prf-prod-frontend-2025 |
-| CloudFront Distribution | E39OHKSWZD4F8J (p1.sedaily.ai) |
+| CloudFront Distribution | E39OHKSWZD4F8J |
+| Domain | p1.sedaily.ai |
+
+### Shared Resources (us-east-1)
+| Resource | ID/Name |
+|----------|---------|
 | Secrets Manager | proof-v1 (Anthropic API key) |
+| Cognito User Pool | us-east-1_ohLOswurY |
 
 ## AI Configuration
 | Setting | Value |
@@ -140,6 +157,20 @@ Updated: 2025-12-21
 | Web Search | Enabled (max 5 uses) |
 
 ## Change History
+
+### Phase 9: Internal Version Created (2025-12-24)
+- **Created separate internal version** at `internal/one`
+- Internal version deployed to new CloudFront:
+  - S3: `nexus-multi-frontend-20251204` (ap-northeast-2)
+  - CloudFront: `E1O9OA8UA34Z49`
+  - Domain: `d1zig3y52jaq1s.cloudfront.net`
+- Internal version differences:
+  - No login required (ProtectedRoute disabled)
+  - No sidebar navigation
+  - No landing page (direct to /11)
+- This external version (p1.sedaily.ai) remains unchanged
+- Backend shared between internal and external versions
+- Updated README.md to document internal vs external comparison
 
 ### Phase 8: Final Testing & Deployment Verification (2025-12-21)
 - **Production deployment verified** - All components tested and working
