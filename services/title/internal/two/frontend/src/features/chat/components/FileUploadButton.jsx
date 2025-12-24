@@ -1,12 +1,12 @@
 import React, { useRef, useState, forwardRef, useImperativeHandle } from 'react';
 import { PaperClipIcon } from '@heroicons/react/24/outline';
-import * as pdfjsLib from 'pdfjs-dist';
+import * as pdfjs from 'pdfjs-dist';
 
-// PDF.js worker 설정 - 로컬 파일 사용
-if (typeof window !== 'undefined' && pdfjsLib) {
-  pdfjsLib.GlobalWorkerOptions.workerSrc = '/pdf.worker.min.js';
-  console.log('PDF.js Worker URL (Local):', pdfjsLib.GlobalWorkerOptions.workerSrc);
-}
+// Vite 환경에서 워커를 로딩하는 가장 안전한 방법
+pdfjs.GlobalWorkerOptions.workerSrc = new URL(
+  'pdfjs-dist/build/pdf.worker.mjs',
+  import.meta.url
+).toString();
 
 const FileUploadButton = forwardRef(({ onFileContent, disabled }, ref) => {
   const fileInputRef = useRef(null);
@@ -123,7 +123,7 @@ const FileUploadButton = forwardRef(({ onFileContent, disabled }, ref) => {
       // 클라이언트 사이드에서 PDF.js를 사용한 텍스트 추출
       const arrayBuffer = await file.arrayBuffer();
       console.log('ArrayBuffer 생성 완료');
-      const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
+      const pdf = await pdfjs.getDocument({ data: arrayBuffer }).promise;
       console.log('PDF 문서 로드 완료, 페이지 수:', pdf.numPages);
       
       let fullText = '';
