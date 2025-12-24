@@ -6,8 +6,8 @@ import json
 import boto3
 import logging
 import time
-from datetime import datetime
-from typing import List, Dict, Any, Optional, Generator, Tuple
+from datetime import datetime, timezone, timedelta
+from typing import List, Dict, Any, Optional, Generator
 import uuid
 import os
 import sys
@@ -20,9 +20,8 @@ from utils.logger import setup_logger
 
 logger = setup_logger(__name__)
 
-# 글로벌 캐시 - Lambda 컨테이너 재사용 시 유지됨
-PROMPT_CACHE: Dict[str, Tuple[Dict[str, Any], float]] = {}
-CACHE_TTL = 300  # 5분 (초 단위)
+# 글로벌 캐시 - Lambda 컨테이너 재사용 시 유지됨 (영구 캐시)
+PROMPT_CACHE: Dict[str, Dict[str, Any]] = {}
 
 # DynamoDB 클라이언트 - 프롬프트 테이블 접근용
 dynamodb = boto3.resource('dynamodb', region_name=AWS_REGION)
@@ -182,30 +181,23 @@ class WebSocketService:
 
     def _load_prompt_from_dynamodb(self, engine_type: str) -> Dict[str, Any]:
         """
-        DynamoDB에서 프롬프트와 파일 로드 (인메모리 캐싱 적용)
+        DynamoDB에서 프롬프트와 파일 로드 (영구 인메모리 캐싱)
         """
         global PROMPT_CACHE
-        now = time.time()
 
         # 캐시 확인
         if engine_type in PROMPT_CACHE:
-            cached_data, cached_time = PROMPT_CACHE[engine_type]
-            age = now - cached_time
+            logger.info(f"✅ Cache HIT for {engine_type} - DB query skipped")
+            return PROMPT_CACHE[engine_type]
 
-            if age < CACHE_TTL:
-                logger.info(f"✅ Cache HIT for {engine_type} (age: {age:.1f}s)")
-                return cached_data
-            else:
-                logger.info(f"⏰ Cache EXPIRED for {engine_type} (age: {age:.1f}s)")
-        else:
-            logger.info(f"❌ Cache MISS for {engine_type}")
+        logger.info(f"❌ Cache MISS for {engine_type} - fetching from DB")
 
-        # 캐시 미스 또는 만료 - DB에서 로드
+        # 캐시 미스 - DB에서 로드
         prompt_data = self._fetch_prompt_from_db(engine_type)
 
-        # 캐시 업데이트
-        PROMPT_CACHE[engine_type] = (prompt_data, now)
-        logger.info(f"💾 Cached prompt for {engine_type}")
+        # 캐시 업데이트 (영구 저장)
+        PROMPT_CACHE[engine_type] = prompt_data
+        logger.info(f"💾 Permanently cached prompt for {engine_type}")
 
         return prompt_data
 
@@ -244,7 +236,7 @@ class WebSocketService:
                     logger.error(f"Error loading files: {str(fe)}")
 
                 elapsed = (time.time() - start_time) * 1000
-                logger.info(f"🔍 DB fetch for {engine_type} in {elapsed:.0f}ms")
+                logger.info(f"🔍 DB fetch for {engine_type} in {elapsed:.0f}ms (will be cached permanently)")
 
                 return prompt_data
             else:
@@ -349,16 +341,9 @@ class WebSocketService:
                     total_response += chunk
                     yield chunk
 
-            # AI 응답을 대화에 저장
-            if total_response:
-                self.conversation_manager.save_message(
-                    conversation_id=conversation_id,
-                    role='assistant',
-                    content=total_response,
-                    engine_type=engine_type,
-                    user_id=user_id
-                )
-                logger.info(f"AI response saved: {len(total_response)} chars")
+            # AI 응답 저장은 message.py에서 처리하므로 여기서는 제거
+            # 중복 저장 방지를 위해 주석 처리
+            logger.info(f"AI response completed: {len(total_response)} chars (저장은 message.py에서 처리)")
 
         except Exception as e:
             logger.error(f"Error streaming response: {str(e)}")
@@ -476,3 +461,38 @@ class WebSocketService:
                 formatted.append(f"AI: {content}")
 
         return "\n\n".join(formatted) if formatted else ""
+
+    @staticmethod
+    def clear_prompt_cache(engine_type: str = None):
+        """
+        프롬프트 캐시 초기화 (관리용)
+
+        Args:
+            engine_type: 특정 엔진 타입만 삭제. None이면 전체 삭제
+        """
+        global PROMPT_CACHE
+
+        if engine_type:
+            if engine_type in PROMPT_CACHE:
+                del PROMPT_CACHE[engine_type]
+                logger.info(f"🗑️ Cleared cache for {engine_type}")
+            else:
+                logger.info(f"No cache found for {engine_type}")
+        else:
+            cache_size = len(PROMPT_CACHE)
+            PROMPT_CACHE.clear()
+            logger.info(f"🗑️ Cleared all cache ({cache_size} entries)")
+
+    @staticmethod
+    def get_cache_stats() -> Dict[str, Any]:
+        """캐시 통계 정보 반환"""
+        global PROMPT_CACHE
+
+        stats = {
+            'total_entries': len(PROMPT_CACHE),
+            'engines': list(PROMPT_CACHE.keys()),
+            'cache_size_bytes': sum(len(str(data)) for data in PROMPT_CACHE.values()),
+            'permanent_cache': True  # 영구 캐시 사용 중
+        }
+
+        return stats

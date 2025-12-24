@@ -1,7 +1,7 @@
 """
-WebSocket 서비스 - 완성 버전 (Prompt Caching 적용)
+WebSocket 서비스 - 완성 버전 (Permanent Prompt Caching 적용)
 우수사례 코드를 참고하여 프롬프트 로드 기능 추가
-애플리케이션 레벨 캐싱으로 DynamoDB 조회 최소화
+영구 인메모리 캐싱으로 DynamoDB 조회 최소화 (Lambda 컨테이너 수명 동안 유지)
 """
 import os
 import sys
@@ -9,21 +9,21 @@ import json
 import boto3
 import logging
 import time
-from typing import Dict, List, Generator, Optional, Any, Tuple
+from typing import Dict, List, Generator, Optional, Any
 from datetime import datetime, timezone
 from decimal import Decimal
 
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from src.config.aws import AWS_REGION, DYNAMODB_TABLES
-from lib.bedrock_client_enhanced import BedrockClientEnhanced
+from lib.bedrock_client_enhanced import BedrockClientEnhanced, create_enhanced_system_prompt
 from lib.anthropic_client import AnthropicClient
 from utils.logger import setup_logger
 
 logger = setup_logger(__name__)
 
-# 글로벌 캐시 - Lambda 컨테이너 재사용 시 유지됨
-PROMPT_CACHE: Dict[str, Tuple[Dict[str, Any], float]] = {}
-CACHE_TTL = 300  # 5분 (초 단위)
+# 글로벌 캐시 - Lambda 컨테이너 재사용 시 영구 유지 (TTL 제거)
+PROMPT_CACHE: Dict[str, Dict[str, Any]] = {}
+# CACHE_TTL 제거 - 영구 캐시로 전환
 
 class WebSocketService:
     """WebSocket 통신 서비스"""
@@ -34,6 +34,7 @@ class WebSocketService:
         self.conversations_table = self.dynamodb.Table(DYNAMODB_TABLES['conversations'])
         self.prompts_table = self.dynamodb.Table(DYNAMODB_TABLES['prompts'])
         self.usage_table = self.dynamodb.Table(DYNAMODB_TABLES['usage'])
+        self.daily_usage_table = self.dynamodb.Table(DYNAMODB_TABLES['daily_usage'])  # 일별 사용량 추적
         self.files_table = self.dynamodb.Table(DYNAMODB_TABLES['files'])  # 파일 테이블 추가
 
         # AI 클라이언트 초기화 (환경변수에 따라 선택)
@@ -58,32 +59,26 @@ class WebSocketService:
     
     def _load_prompt_from_dynamodb(self, engine_type: str) -> Dict[str, Any]:
         """
-        DynamoDB에서 프롬프트와 파일 로드 (인메모리 캐싱 적용)
+        DynamoDB에서 프롬프트와 파일 로드 (영구 인메모리 캐싱 적용)
 
-        캐시 히트 시 DB 조회를 생략하여 성능 향상
+        캐시 히트 시 DB 조회를 완전히 생략하여 최대 성능 향상
+        Lambda 컨테이너가 재시작될 때까지 캐시 유지
         """
         global PROMPT_CACHE
-        now = time.time()
 
-        # 캐시 확인
+        # 영구 캐시 확인 (TTL 없음)
         if engine_type in PROMPT_CACHE:
-            cached_data, cached_time = PROMPT_CACHE[engine_type]
-            age = now - cached_time
+            logger.info(f"✅ Cache HIT for {engine_type} - DB query skipped (permanent cache)")
+            return PROMPT_CACHE[engine_type]
 
-            if age < CACHE_TTL:
-                logger.info(f"✅ Cache HIT for {engine_type} (age: {age:.1f}s) - DB 조회 생략")
-                return cached_data
-            else:
-                logger.info(f"⏰ Cache EXPIRED for {engine_type} (age: {age:.1f}s) - 재조회")
-        else:
-            logger.info(f"❌ Cache MISS for {engine_type} - 최초 조회")
+        logger.info(f"❌ Cache MISS for {engine_type} - fetching from DB (first time)")
 
-        # 캐시 미스 또는 만료 - DB에서 로드
+        # 캐시 미스 - DB에서 로드
         prompt_data = self._fetch_prompt_from_db(engine_type)
 
-        # 캐시 업데이트
-        PROMPT_CACHE[engine_type] = (prompt_data, now)
-        logger.info(f"💾 Cached prompt for {engine_type} "
+        # 영구 캐시 업데이트
+        PROMPT_CACHE[engine_type] = prompt_data
+        logger.info(f"💾 Permanently cached prompt for {engine_type} "
                    f"({len(prompt_data.get('files', []))} files, "
                    f"{len(str(prompt_data))} bytes)")
 
@@ -169,23 +164,42 @@ class WebSocketService:
             # Anthropic API 사용 시
             if self.ai_provider == 'anthropic' and hasattr(self.ai_client, 'stream_response'):
                 try:
-                    logger.info(f"Using Anthropic API for {engine_type}")
+                    logger.info(f"Using Anthropic API for {engine_type} with prompt caching")
                     
-                    # 프롬프트와 대화 컨텍스트 결합
+                    # 프롬프트와 대화 컨텍스트 결합 (Bedrock과 동일한 체계적 프롬프트)
                     full_system_prompt = self._build_system_prompt(
                         guidelines=prompt_data.get('instruction', ''),
                         description=prompt_data.get('description', ''),
                         files=prompt_data.get('files', []),
-                        conversation_context=formatted_history
+                        conversation_context=formatted_history,
+                        engine_type=engine_type,
+                        user_role=user_role
                     )
+                    
+                    # 웹 검색 활성화 여부 판단
+                    enable_web_search = self._should_enable_web_search(user_message)
+                    
+                    # Prompt Caching 활성화 (기본값: True)
+                    use_caching = os.environ.get('ENABLE_PROMPT_CACHING', 'true').lower() == 'true'
                     
                     for chunk in self.ai_client.stream_response(
                         user_message=user_message,
                         system_prompt=full_system_prompt,
-                        conversation_context=formatted_history
+                        conversation_context=formatted_history,
+                        enable_web_search=enable_web_search,
+                        web_search_max_uses=int(os.environ.get('WEB_SEARCH_MAX_USES', '5')),
+                        use_caching=use_caching  # Prompt Caching 파라미터 추가
                     ):
                         total_response += chunk
                         yield chunk
+                        
+                    # 사용량 정보 로깅 (비용 포함)
+                    if hasattr(self.ai_client, 'get_last_usage'):
+                        usage = self.ai_client.get_last_usage()
+                        if usage:
+                            logger.info(f"📊 API Usage: {usage}")
+                            if 'total_cost' in usage:
+                                logger.info(f"💵 Total cost for this request: ${usage['total_cost']:.6f}")
                         
                 except Exception as e:
                     # Anthropic API 실패 시 Bedrock으로 폴백
@@ -366,21 +380,26 @@ class WebSocketService:
         output_text: str
     ) -> None:
         """
-        사용량 추적
+        사용량 추적 (월별 + 일별)
         """
         try:
             # 토큰 수 추정 (대략적인 계산)
             input_tokens = len(input_text.split()) * 2
             output_tokens = len(output_text.split()) * 2
-            
-            # 사용량 기록
-            year_month = datetime.now(timezone.utc).strftime('%Y-%m')
+            total_tokens = input_tokens + output_tokens
 
-            # 원자적 업데이트
+            now = datetime.now(timezone.utc)
+            year_month = now.strftime('%Y-%m')
+            today = now.strftime('%Y-%m-%d')
+
+            # yearMonth에 engineType 포함하여 중복 방지
+            year_month_with_engine = f"{year_month}#{engine_type.lower()}"
+
+            # 1. 월별 사용량 기록 (기존)
             self.usage_table.update_item(
                 Key={
                     'userId': user_id,
-                    'yearMonth': year_month
+                    'yearMonth': year_month_with_engine
                 },
                 UpdateExpression="""
                     ADD requestCount :one,
@@ -394,14 +413,44 @@ class WebSocketService:
                     ':one': 1,
                     ':input': input_tokens,
                     ':output': output_tokens,
-                    ':total': input_tokens + output_tokens,
+                    ':total': total_tokens,
                     ':engine': engine_type,
-                    ':now': datetime.now(timezone.utc).isoformat()
+                    ':now': now.isoformat()
                 }
             )
-            
-            logger.info(f"Usage tracked for {user_id}: {input_tokens} + {output_tokens} tokens")
-            
+
+            # 2. 일별 사용량 기록 (신규 - 대시보드 날짜 필터링용)
+            date_engine_key = f"{today}#{engine_type}"
+            self.daily_usage_table.update_item(
+                Key={
+                    'userId': user_id,
+                    'dateEngine': date_engine_key
+                },
+                UpdateExpression="""
+                    ADD inputTokens :input,
+                        outputTokens :output,
+                        totalTokens :total,
+                        messageCount :one
+                    SET #date = :date,
+                        engineType = :engine,
+                        updatedAt = :now
+                """,
+                ExpressionAttributeNames={
+                    '#date': 'date'  # 'date'는 예약어이므로 ExpressionAttributeNames 사용
+                },
+                ExpressionAttributeValues={
+                    ':one': 1,
+                    ':input': input_tokens,
+                    ':output': output_tokens,
+                    ':total': total_tokens,
+                    ':date': today,
+                    ':engine': engine_type,
+                    ':now': now.isoformat()
+                }
+            )
+
+            logger.info(f"Usage tracked for {user_id}: {input_tokens} + {output_tokens} tokens (monthly + daily)")
+
         except Exception as e:
             logger.error(f"Error tracking usage: {e}")
     
@@ -454,35 +503,33 @@ class WebSocketService:
         guidelines: str,
         description: str,
         files: List[Dict],
-        conversation_context: str
+        conversation_context: str,
+        engine_type: str = "P1",
+        user_role: str = "user"
     ) -> str:
         """
         Anthropic API용 시스템 프롬프트 구성
+        Bedrock과 동일한 체계적 프롬프트 사용
         """
-        prompt_parts = []
-        
-        # 기본 가이드라인
-        if guidelines:
-            prompt_parts.append(guidelines)
-        
-        # 설명 추가
-        if description:
-            prompt_parts.append(f"\n\n=== 추가 설명 ===\n{description}")
-        
-        # 파일 내용 추가
-        if files:
-            prompt_parts.append("\n\n=== 참고 문서 ===")
-            for file in files:
-                file_name = file.get('fileName', 'Unknown')
-                file_content = file.get('fileContent', '')
-                if file_content:
-                    prompt_parts.append(f"\n[{file_name}]\n{file_content}")
-        
-        # 대화 컨텍스트 추가
-        if conversation_context:
-            prompt_parts.append(f"\n\n{conversation_context}")
-        
-        return "\n".join(prompt_parts)
+        # prompt_data 구성
+        prompt_data = {
+            'prompt': {
+                'instruction': guidelines or "",
+                'description': description or ""
+            },
+            'files': files or [],
+            'userRole': user_role
+        }
+
+        # Bedrock과 동일한 체계적 프롬프트 생성
+        system_prompt = create_enhanced_system_prompt(
+            prompt_data=prompt_data,
+            engine_type=engine_type,
+            use_enhanced=True,
+            flexibility_level="strict"
+        )
+
+        return system_prompt
     
     def _format_conversation_for_bedrock(self, conversation_history: List[Dict]) -> str:
         """
@@ -503,3 +550,56 @@ class WebSocketService:
             return "\n\n=== 이전 대화 내용 ===\n" + "\n\n".join(formatted_messages) + "\n\n=== 현재 질문 ==="
         
         return ""
+    
+    def _should_enable_web_search(self, user_message: str) -> bool:
+        """
+        사용자 메시지에서 웹 검색 활성화 필요성 분석
+        """
+        try:
+            # 환경변수로 웹 검색 기능 전역 비활성화 가능
+            if os.environ.get('ENABLE_NATIVE_WEB_SEARCH', 'true').lower() != 'true':
+                return False
+            
+            # 검색 키워드들
+            search_keywords = [
+                '최신', '오늘', '현재', '뉴스', '주가', '환율', '날씨', '트렌드',
+                '속보', '실시간', '녹색소비', '카이스트', '디스카운트', '배당락',
+                '비단등', '어디', '먹을거리', '관깑', '도시락', '매매', '알바', '일자리',
+                '새로나온', '출시', '업데이트', '대표검', '순양', '손보', '이종명',
+                '센터', '뿌리오', '로보트', '관련', 'related', 'latest', 'today', 'news', 'current'
+            ]
+            
+            # 커미션 표현들
+            action_keywords = [
+                '찾아줘', '알아줘', '서치해', '검색해', '확인해',
+                '업데이트 된', '정보', '어떻게'
+            ]
+            
+            # 키워드 매칭
+            message_lower = user_message.lower()
+            
+            # 검색 키워드 및 명령 매칭
+            for keyword in search_keywords + action_keywords:
+                if keyword in message_lower:
+                    logger.info(f"Web search enabled by keyword: {keyword}")
+                    return True
+            
+            # 특정 질문 패턴들
+            question_patterns = [
+                '예전에', '예전과', '비교', '차이', '저번과', '지난', 
+                '지난번', '전년', '전달', '전주', '전 대비', 
+                '전에 비해', '전 세대', '전과', '지나고',
+                '안 되나요', '안 돼요', '안 되는', '되지 않는', 
+                '작동안해', '메이지', '앉야', '개판', '이번', '이달', '그 전', '배경'
+            ]
+            
+            for pattern in question_patterns:
+                if pattern in message_lower:
+                    logger.info(f"Web search enabled by pattern: {pattern}")
+                    return True
+                    
+            return False
+        
+        except Exception as e:
+            logger.error(f"Error in web search keyword detection: {str(e)}")
+            return False

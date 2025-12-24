@@ -312,21 +312,37 @@ def create_enhanced_system_prompt(
     return system_prompt
 
 
-def _replace_template_variables(prompt: str) -> str:
-    """템플릿 변수를 실제 값으로 치환"""
-    import uuid
+def _replace_template_variables(prompt: str, use_static_for_cache: bool = True) -> str:
+    """
+    템플릿 변수를 실제 값으로 치환
+
+    Args:
+        prompt: 템플릿 프롬프트
+        use_static_for_cache: True면 정적 값 사용 (Anthropic 캐싱 최적화)
+    """
     from datetime import datetime, timezone, timedelta
 
     # 한국 시간 (UTC+9)
     kst = timezone(timedelta(hours=9))
     current_time = datetime.now(kst)
 
-    replacements = {
-        '{{current_datetime}}': current_time.strftime('%Y-%m-%d %H:%M:%S KST'),
-        '{{user_location}}': '대한민국',
-        '{{session_id}}': str(uuid.uuid4())[:8],
-        '{{timezone}}': 'Asia/Seoul (KST)'
-    }
+    if use_static_for_cache:
+        # 캐싱 최적화: 정적 값 사용 (시스템 프롬프트 동일하게 유지)
+        replacements = {
+            '{{current_datetime}}': '현재 시간은 사용자 메시지에서 확인하세요',
+            '{{user_location}}': '대한민국',
+            '{{session_id}}': 'session',
+            '{{timezone}}': 'Asia/Seoul (KST)'
+        }
+    else:
+        # 동적 값 사용 (Bedrock 등 캐싱 불필요 시)
+        import uuid
+        replacements = {
+            '{{current_datetime}}': current_time.strftime('%Y-%m-%d %H:%M:%S KST'),
+            '{{user_location}}': '대한민국',
+            '{{session_id}}': str(uuid.uuid4())[:8],
+            '{{timezone}}': 'Asia/Seoul (KST)'
+        }
 
     for placeholder, value in replacements.items():
         prompt = prompt.replace(placeholder, value)

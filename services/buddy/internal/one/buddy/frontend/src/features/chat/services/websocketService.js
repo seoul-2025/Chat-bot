@@ -182,7 +182,7 @@ class WebSocketService {
     return chunks;
   }
 
-  // 메시지 전송 (청크 지원)
+  // 메시지 전송 (청크 지원) - 매개변수 순서 정정
   sendMessage(
     message,
     engineType = "11",
@@ -207,11 +207,10 @@ class WebSocketService {
       }
 
       try {
-        // 사용자 정보 가져오기
+        // 사용자 정보 가져오기 - Title 서비스 방식
         const userInfo = JSON.parse(localStorage.getItem("userInfo") || "{}");
-        // userId를 우선 사용하되, 없으면 email 또는 username 사용
-        const userId =
-          userInfo.userId || userInfo.email || userInfo.username || "anonymous";
+        // username을 우선 사용하되, 없으면 userId 또는 email 사용 (매핑 없이 직접 사용)
+        const userId = userInfo.username || userInfo.userId || userInfo.email || "anonymous";
 
         // 사용자 역할 가져오기
         const userRole = localStorage.getItem("userRole") || "user";

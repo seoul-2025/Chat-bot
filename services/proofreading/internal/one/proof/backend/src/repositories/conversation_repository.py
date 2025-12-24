@@ -16,7 +16,7 @@ logger = logging.getLogger(__name__)
 class ConversationRepository:
     """대화 데이터 접근 계층"""
     
-    def __init__(self, table_name: str = 'nx-wt-prf-conversations', region: str = 'us-east-1'):
+    def __init__(self, table_name: str = 'nx-wt-prf-conversations-v2', region: str = 'us-east-1'):
         self.dynamodb = boto3.resource('dynamodb', region_name=region)
         self.table = self.dynamodb.Table(table_name)
         logger.info(f"ConversationRepository initialized with table: {table_name}")
@@ -44,29 +44,11 @@ class ConversationRepository:
             logger.error(f"Error saving conversation: {str(e)}")
             raise
     
-    def find_by_id(self, conversation_id: str, user_id: str = None) -> Optional[Conversation]:
+    def find_by_id(self, conversation_id: str) -> Optional[Conversation]:
         """ID로 대화 조회"""
         try:
-            # userId가 없으면 scan으로 찾기
-            if not user_id:
-                response = self.table.scan(
-                    FilterExpression='conversationId = :conversationId',
-                    ExpressionAttributeValues={
-                        ':conversationId': conversation_id
-                    }
-                )
-                
-                items = response.get('Items', [])
-                if items:
-                    return Conversation.from_dict(items[0])
-                return None
-            
-            # userId가 있으면 직접 조회
             response = self.table.get_item(
-                Key={
-                    'userId': user_id,
-                    'conversationId': conversation_id
-                }
+                Key={'conversationId': conversation_id}
             )
             
             if 'Item' in response:
@@ -87,6 +69,7 @@ class ConversationRepository:
             # 페이지네이션을 사용하여 모든 대화 조회
             while True:
                 query_params = {
+                    'IndexName': 'userId-createdAt-index',
                     'KeyConditionExpression': 'userId = :userId',
                     'ExpressionAttributeValues': {
                         ':userId': user_id
@@ -116,25 +99,15 @@ class ConversationRepository:
                 if not last_evaluated_key:
                     break
             
-            # createdAt 기준으로 정렬 (최신순)
-            conversations.sort(key=lambda x: x.created_at or '', reverse=True)
-            
             return conversations
             
         except Exception as e:
             logger.error(f"Error finding conversations by user: {str(e)}")
             raise
     
-    def update_messages(self, conversation_id: str, messages: List[Message], user_id: str = None) -> bool:
+    def update_messages(self, conversation_id: str, messages: List[Message]) -> bool:
         """대화의 메시지 업데이트"""
         try:
-            # userId 찾기
-            if not user_id:
-                existing = self.find_by_id(conversation_id)
-                if not existing:
-                    raise ValueError(f"Conversation not found: {conversation_id}")
-                user_id = existing.user_id
-            
             messages_data = [
                 {
                     'role': msg.role,
@@ -146,10 +119,7 @@ class ConversationRepository:
             ]
             
             self.table.update_item(
-                Key={
-                    'userId': user_id,
-                    'conversationId': conversation_id
-                },
+                Key={'conversationId': conversation_id},
                 UpdateExpression='SET messages = :messages, updatedAt = :updatedAt',
                 ExpressionAttributeValues={
                     ':messages': messages_data,
@@ -164,21 +134,11 @@ class ConversationRepository:
             logger.error(f"Error updating messages: {str(e)}")
             raise
     
-    def update_title(self, conversation_id: str, title: str, user_id: str = None) -> bool:
+    def update_title(self, conversation_id: str, title: str) -> bool:
         """대화 제목 업데이트"""
         try:
-            # userId 찾기
-            if not user_id:
-                existing = self.find_by_id(conversation_id)
-                if not existing:
-                    raise ValueError(f"Conversation not found: {conversation_id}")
-                user_id = existing.user_id
-            
             self.table.update_item(
-                Key={
-                    'userId': user_id,
-                    'conversationId': conversation_id
-                },
+                Key={'conversationId': conversation_id},
                 UpdateExpression='SET title = :title, updatedAt = :updatedAt',
                 ExpressionAttributeValues={
                     ':title': title,
@@ -193,21 +153,11 @@ class ConversationRepository:
             logger.error(f"Error updating title: {str(e)}")
             raise
     
-    def delete(self, conversation_id: str, user_id: str = None) -> bool:
+    def delete(self, conversation_id: str) -> bool:
         """대화 삭제"""
         try:
-            # userId 찾기
-            if not user_id:
-                existing = self.find_by_id(conversation_id)
-                if not existing:
-                    raise ValueError(f"Conversation not found: {conversation_id}")
-                user_id = existing.user_id
-            
             self.table.delete_item(
-                Key={
-                    'userId': user_id,
-                    'conversationId': conversation_id
-                }
+                Key={'conversationId': conversation_id}
             )
             
             logger.info(f"Conversation deleted: {conversation_id}")

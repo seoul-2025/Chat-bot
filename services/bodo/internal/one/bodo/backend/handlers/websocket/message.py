@@ -13,6 +13,7 @@ import os
 
 from services.websocket_service import WebSocketService
 from utils.logger import setup_logger
+from lib.citation_formatter import CitationFormatter
 
 logger = setup_logger(__name__)
 
@@ -116,6 +117,12 @@ def handler(event, context):
                 
                 chunk_index += 1
             
+            # 웹 검색 출처 포맷팅 적용
+            formatter = CitationFormatter()
+            if "📚 출처:" not in total_response and "http" in total_response:
+                total_response = formatter.format_response_with_citations(total_response)
+                logger.info("Citations formatted in response")
+            
             # 4. 사용량 추적
             websocket_service.track_usage(
                 user_id=user_id,
@@ -127,10 +134,11 @@ def handler(event, context):
             # 4.5. AI 응답 저장 - ConversationManager import 필요
             from handlers.websocket.conversation_manager import ConversationManager
             conversation_manager = ConversationManager()
+            # 포맷팅된 응답 저장
             conversation_manager.save_message(
                 conversation_id=conversation_id,
                 role='assistant',
-                content=total_response,
+                content=total_response,  # 포맷팅된 버전 저장
                 engine_type=engine_type,
                 user_id=user_id
             )

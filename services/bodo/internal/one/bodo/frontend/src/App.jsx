@@ -9,8 +9,7 @@ import {
 } from "react-router-dom";
 import { motion } from "framer-motion";
 import { AnimatePresence } from "framer-motion";
-// import ProtectedRoute from "./features/auth/components/ProtectedRoute"; // 로그인 비활성화
-import ProtectedRoute from "./features/auth/components/DummyProtectedRoute"; // 더미 ProtectedRoute 사용
+import ProtectedRoute from "./features/auth/components/ProtectedRoute";
 import { PageTransition } from "./shared/components/ui/PageTransition";
 
 // Lazy load components for better performance
@@ -52,8 +51,10 @@ function AppContent() {
   const navigate = useNavigate();
   const location = useLocation();
 
-  // 로그인 항상 true로 설정 (로그인 비활성화)
-  const [isLoggedIn, setIsLoggedIn] = useState(true);
+  // localStorage에서 상태 복원
+  const [isLoggedIn, setIsLoggedIn] = useState(() => {
+    return localStorage.getItem("isLoggedIn") === "true";
+  });
   const [userRole, setUserRole] = useState(() => {
     return localStorage.getItem("userRole") || "user";
   });
@@ -199,9 +200,15 @@ function AppContent() {
       title: engine === "11" ? "기업 보도자료" : "정부/공공 보도자료",
     }));
 
-    // 로그인 체크 없이 바로 엔진 페이지로 이동
-    const enginePath = engine.toLowerCase();
-    navigate(`/${enginePath}`);
+    // 로그인 상태 확인
+    if (isLoggedIn) {
+      // 로그인되어 있으면 해당 엔진 페이지로 이동
+      const enginePath = engine.toLowerCase();
+      navigate(`/${enginePath}`);
+    } else {
+      // 로그인되어 있지 않으면 로그인 페이지로
+      navigate("/login", { state: { engine } });
+    }
   };
 
   const handleSignUp = () => {
@@ -255,8 +262,11 @@ function AppContent() {
     navigate(`/${enginePath}/chat`);
   };
 
-  // 사이드바 비활성화
-  const showSidebar = false;
+  // 사이드바를 보여줄 페이지 확인 (랜딩, 로그인, 회원가입, 대시보드, 구독, 프로필 제외)
+  const showSidebar =
+    !["/", "/login", "/signup", "/subscription", "/profile"].includes(
+      location.pathname
+    ) && !location.pathname.includes("/dashboard");
 
   return (
     <div
@@ -267,7 +277,15 @@ function AppContent() {
         color: "hsl(var(--text-100))",
       }}
     >
-      {/* 사이드바 비활성화 */}
+      {/* Sidebar - show on all pages except landing, login, signup */}
+      {showSidebar && (
+        <Sidebar
+          ref={sidebarRef}
+          selectedEngine={selectedEngine}
+          isOpen={isSidebarOpen}
+          onToggle={toggleSidebar}
+        />
+      )}
 
       <motion.div
         className="min-h-full w-full min-w-0 flex-1"
@@ -402,6 +420,7 @@ function AppContent() {
                   </ProtectedRoute>
                 }
               />
+              {/* Dashboard routes disabled
               <Route
                 path="/11/dashboard"
                 element={
@@ -428,6 +447,7 @@ function AppContent() {
                   </ProtectedRoute>
                 }
               />
+              */}
               <Route
                 path="/subscription"
                 element={

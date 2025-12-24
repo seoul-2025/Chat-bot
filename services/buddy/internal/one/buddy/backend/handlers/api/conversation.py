@@ -97,10 +97,23 @@ def handler(event, context):
 
             # conversationId가 있으면 기존 대화가 있는지 확인
             if conversation_id:
-                existing = conversation_service.get_conversation(conversation_id)
+                # userId와 conversationId로 조회하여 정확한 대화 찾기
+                existing = None
+                try:
+                    # 먼저 간단한 조회 시도
+                    existing = conversation_service.get_conversation(conversation_id)
+                    
+                    # 찾은 대화의 userId가 현재 userId와 일치하는지 확인
+                    if existing and existing.user_id != user_id:
+                        logger.warning(f"Conversation {conversation_id} exists but belongs to different user")
+                        existing = None
+                except:
+                    logger.info(f"Conversation {conversation_id} not found, will create new")
+                    existing = None
+                
                 if existing:
-                    # 기존 대화가 있으면 메시지 업데이트
-                    logger.info(f"Conversation {conversation_id} exists, updating messages")
+                    # 기존 대화가 있으면 메시지 업데이트만 수행 (중복 생성 방지)
+                    logger.info(f"Conversation {conversation_id} exists for user {user_id}, updating messages only")
 
                     # 메시지가 있으면 업데이트
                     if messages and len(messages) > 0:
@@ -124,12 +137,13 @@ def handler(event, context):
                         else:
                             logger.error(f"Failed to update messages for {conversation_id}")
 
+                    # 기존 대화가 있으므로 새로 생성하지 않고 업데이트 결과만 반환
                     return APIResponse.success({
                         'conversationId': conversation_id,
                         'userId': user_id,
-                        'engineType': engine_type,
-                        'title': existing.title if existing else title,
-                        'message': 'Conversation updated'
+                        'engineType': existing.engine_type,  # 기존 엔진 타입 유지
+                        'title': existing.title,  # 기존 제목 유지
+                        'message': 'Conversation exists, messages updated'
                     }, 200)
 
             # 새 대화 생성

@@ -78,7 +78,7 @@ const ChatPage = ({
     }
     
     // 둘 다 없으면 새로 생성
-    const newId = `${selectedEngine}_${Date.now()}`;
+    const newId = crypto.randomUUID();
     console.log("🆕 새 conversationId 생성:", newId);
     return newId;
   });
@@ -327,7 +327,7 @@ const ChatPage = ({
     } else if (!loadConversationId) {
       // 새 대화인 경우
       setIsLoadingConversation(true);
-      const newConversationId = `${selectedEngine}_${Date.now()}`;
+      const newConversationId = crypto.randomUUID();
       setCurrentConversationId(newConversationId);
       setMessages([]);
       setConversationSaved(false); // 새 대화 시작 시 초기화
@@ -737,34 +737,52 @@ const ChatPage = ({
                   title: messagesToSave[0]?.content?.substring(0, 50) || "New Conversation",
                 };
 
-                console.log("💾 AI 응답 완료, 전체 대화 저장:", {
+                console.log("💾 AI 응답 완료, 전체 대화 저장 검토:", {
                   conversationId: currentConversationId,
                   userId: userId,
                   engineType: conversationData.engineType,
                   messageCount: normalizedMessages.length,
+                  conversationSaved: conversationSaved,  // 이미 저장되었는지 확인
                   messages: normalizedMessages.map(m => ({
                     role: m.role,
                     preview: m.content.substring(0, 30) + '...'
                   }))
                 });
 
-                import("../services/conversationService").then(
-                  ({ saveConversation }) => {
-                    saveConversation(conversationData)
-                      .then((result) => {
-                        console.log("✅ 대화 저장 성공:", result);
-                        setConversationSaved(true); // 대화 저장됨 표시
-                        // 사이드바 새로고침
-                        window.dispatchEvent(new CustomEvent("refreshSidebar"));
-                        if (onNewConversation) {
-                          onNewConversation();
-                        }
-                      })
-                      .catch((error) =>
-                        console.error("❌ 대화 저장 실패:", error)
-                      );
-                  }
-                );
+                // 첫 번째 대화(메시지가 2개이고 아직 저장하지 않은 경우)일 때만 서버에 저장
+                if (!conversationSaved && normalizedMessages.length <= 2) {
+                  console.log("🆕 첫 대화 - 서버에 저장");
+                  import("../services/conversationService").then(
+                    ({ saveConversation }) => {
+                      saveConversation(conversationData)
+                        .then((result) => {
+                          console.log("✅ 대화 저장 성공:", result);
+                          setConversationSaved(true); // 대화 저장됨 표시
+                          // 사이드바 새로고침
+                          window.dispatchEvent(new CustomEvent("refreshSidebar"));
+                          if (onNewConversation) {
+                            onNewConversation();
+                          }
+                        })
+                        .catch((error) =>
+                          console.error("❌ 대화 저장 실패:", error)
+                        );
+                    }
+                  );
+                } else {
+                  console.log("📝 추가 메시지 - localStorage만 업데이트");
+                  // localStorage에만 저장
+                  const conversations = JSON.parse(
+                    localStorage.getItem("conversations") || "{}"
+                  );
+                  const key = `conversation_${currentConversationId}`;
+                  conversations[key] = {
+                    ...conversationData,
+                    createdAt: conversations[key]?.createdAt || new Date().toISOString(),
+                    updatedAt: new Date().toISOString()
+                  };
+                  localStorage.setItem("conversations", JSON.stringify(conversations));
+                }
               }
 
               return updated;

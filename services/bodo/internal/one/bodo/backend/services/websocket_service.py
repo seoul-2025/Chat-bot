@@ -1,7 +1,7 @@
 """
 WebSocket Service
 WebSocket 메시지 처리 및 Bedrock 통합 서비스
-프롬프트 인메모리 캐싱 지원
+영구 프롬프트 인메모리 캐싱 지원 (Lambda 컨테이너 수명 동안 유지)
 """
 import json
 import boto3
@@ -26,9 +26,9 @@ logger = setup_logger(__name__)
 dynamodb = boto3.resource('dynamodb', region_name=AWS_REGION)
 prompts_table = dynamodb.Table(DYNAMODB_TABLES['prompts'])
 
-# 글로벌 프롬프트 캐시 (Lambda 컨테이너 재사용 시 유지)
-PROMPT_CACHE: Dict[str, Tuple[Dict[str, Any], float]] = {}
-CACHE_TTL = 300  # 5분 (초 단위)
+# 글로벌 프롬프트 캐시 - Lambda 컨테이너 재사용 시 유지됨 (영구 캐시)
+PROMPT_CACHE: Dict[str, Dict[str, Any]] = {}
+# TTL 제거 - Lambda 컨테이너가 살아있는 동안 영구적으로 캐시 유지
 
 
 class WebSocketService:
@@ -116,32 +116,26 @@ class WebSocketService:
 
     def _load_prompt_from_dynamodb(self, engine_type: str) -> Dict[str, Any]:
         """
-        DynamoDB에서 프롬프트와 파일 로드 (인메모리 캐싱 적용)
+        DynamoDB에서 프롬프트와 파일 로드 (영구 인메모리 캐싱 적용)
 
         캐시 히트 시 DynamoDB 조회를 완전히 생략하여 응답 속도 향상
+        Lambda 컨테이너 수명 동안 영구 유지
         """
         global PROMPT_CACHE
-        now = time.time()
 
-        # 캐시 확인
+        # 캐시 확인 (영구 캐시)
         if engine_type in PROMPT_CACHE:
-            cached_data, cached_time = PROMPT_CACHE[engine_type]
-            age = now - cached_time
+            logger.info(f"✅ Cache HIT for {engine_type} - DB query skipped (permanent cache)")
+            return PROMPT_CACHE[engine_type]
 
-            if age < CACHE_TTL:
-                logger.info(f"✅ Cache HIT for {engine_type} (age: {age:.1f}s) - DB 조회 생략")
-                return cached_data
-            else:
-                logger.info(f"⏰ Cache EXPIRED for {engine_type} (age: {age:.1f}s) - 재조회")
-        else:
-            logger.info(f"❌ Cache MISS for {engine_type} - 최초 조회")
+        logger.info(f"❌ Cache MISS for {engine_type} - fetching from DB")
 
-        # 캐시 미스 또는 만료 - DB에서 로드
+        # 캐시 미스 - DB에서 로드
         prompt_data = self._fetch_prompt_from_db(engine_type)
 
-        # 캐시 업데이트
-        PROMPT_CACHE[engine_type] = (prompt_data, now)
-        logger.info(f"💾 Cached prompt for {engine_type} "
+        # 영구 캐시 업데이트 (TTL 없음)
+        PROMPT_CACHE[engine_type] = prompt_data
+        logger.info(f"💾 Permanently cached prompt for {engine_type} "
                    f"({len(prompt_data.get('files', []))} files, "
                    f"{len(str(prompt_data))} bytes)")
 
@@ -229,19 +223,31 @@ class WebSocketService:
             if self.ai_provider == 'anthropic' and hasattr(self.ai_client, 'stream_response'):
                 try:
                     logger.info(f"Using Anthropic API for {engine_type}")
-                    
-                    # 프롬프트와 대화 컨텍스트 결합
-                    full_system_prompt = self._build_system_prompt(
-                        guidelines=prompt_data.get('instruction', ''),
-                        description=prompt_data.get('description', ''),
-                        files=prompt_data.get('files', []),
-                        conversation_context=formatted_history
+
+                    # 체계적인 시스템 프롬프트 생성 (Bedrock과 동일한 구조 사용)
+                    from lib.bedrock_client_enhanced import create_enhanced_system_prompt
+
+                    prompt_data_for_system = {
+                        'prompt': {
+                            'instruction': prompt_data.get('instruction', ''),
+                            'description': prompt_data.get('description', '')
+                        },
+                        'files': prompt_data.get('files', []),
+                        'userRole': user_role
+                    }
+
+                    full_system_prompt = create_enhanced_system_prompt(
+                        prompt_data_for_system,
+                        engine_type,
+                        use_enhanced=True,
+                        flexibility_level="strict"
                     )
                     
                     for chunk in self.ai_client.stream_response(
                         user_message=user_message,
                         system_prompt=full_system_prompt,
-                        conversation_context=formatted_history
+                        conversation_history=conversation_history,  # 캐싱 최적화: messages 배열로 전달
+                        enable_web_search=True  # 기본적으로 웹 검색 활성화
                     ):
                         total_response += chunk
                         yield chunk
@@ -307,6 +313,41 @@ class WebSocketService:
         except Exception as e:
             logger.error(f"Error clearing history: {str(e)}")
             return False
+    
+    @staticmethod
+    def clear_prompt_cache(engine_type: str = None):
+        """
+        프롬프트 캐시 초기화 (관리용)
+        
+        Args:
+            engine_type: 특정 엔진 타입만 삭제. None이면 전체 삭제
+        """
+        global PROMPT_CACHE
+        
+        if engine_type:
+            if engine_type in PROMPT_CACHE:
+                del PROMPT_CACHE[engine_type]
+                logger.info(f"🗑️ Cleared cache for {engine_type}")
+            else:
+                logger.info(f"No cache found for {engine_type}")
+        else:
+            cache_size = len(PROMPT_CACHE)
+            PROMPT_CACHE.clear()
+            logger.info(f"🗑️ Cleared all cache ({cache_size} entries)")
+    
+    @staticmethod
+    def get_cache_stats() -> Dict[str, Any]:
+        """캐시 통계 정보 반환"""
+        global PROMPT_CACHE
+        
+        stats = {
+            'total_entries': len(PROMPT_CACHE),
+            'engines': list(PROMPT_CACHE.keys()),
+            'cache_size_bytes': sum(len(str(data)) for data in PROMPT_CACHE.values()),
+            'permanent_cache': True  # 영구 캐시 사용 중
+        }
+        
+        return stats
 
     def track_usage(
         self,
@@ -406,41 +447,6 @@ class WebSocketService:
 
         return merged
 
-    def _build_system_prompt(
-        self,
-        guidelines: str,
-        description: str,
-        files: List[Dict],
-        conversation_context: str
-    ) -> str:
-        """
-        Anthropic API용 시스템 프롬프트 구성
-        """
-        prompt_parts = []
-        
-        # 기본 가이드라인
-        if guidelines:
-            prompt_parts.append(guidelines)
-        
-        # 설명 추가
-        if description:
-            prompt_parts.append(f"\n\n=== 추가 설명 ===\n{description}")
-        
-        # 파일 내용 추가
-        if files:
-            prompt_parts.append("\n\n=== 참고 문서 ===")
-            for file in files:
-                file_name = file.get('fileName', 'Unknown')
-                file_content = file.get('fileContent', '')
-                if file_content:
-                    prompt_parts.append(f"\n[{file_name}]\n{file_content}")
-        
-        # 대화 컨텍스트 추가
-        if conversation_context:
-            prompt_parts.append(f"\n\n{conversation_context}")
-        
-        return "\n".join(prompt_parts)
-    
     def _format_conversation_for_bedrock(self, conversation_history: List[Dict]) -> str:
         """
         Bedrock에 전달할 대화 컨텍스트 포맷팅

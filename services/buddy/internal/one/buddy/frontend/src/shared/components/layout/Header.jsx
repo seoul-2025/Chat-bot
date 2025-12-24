@@ -204,7 +204,6 @@ const Header = ({
                 </div>
               </div>
             )} */}
-            {/* 대시보드 버튼 비활성화
             {onDashboard && (
               <div className="hidden md:block">
                 <button
@@ -216,7 +215,6 @@ const Header = ({
                 </button>
               </div>
             )}
-            */}
 
             {isLoggedIn && userInfo ? (
               <div className="relative" ref={userDropdownRef}>
@@ -294,7 +292,6 @@ const Header = ({
                       </div>
                     </div>
                     <div className="py-1">
-                      {/* 모바일 대시보드 버튼 비활성화
                       {onDashboard && (
                         <button
                           className="flex items-center px-4 py-2 text-sm text-text-200 hover:bg-bg-200 w-full text-left transition-colors duration-150 md:hidden"
@@ -304,7 +301,6 @@ const Header = ({
                           대시보드
                         </button>
                       )}
-                      */}
                       <button
                         className="flex items-center px-4 py-2 text-sm text-text-200 hover:bg-bg-200 w-full text-left transition-colors duration-150"
                         onClick={() => handleUserMenuClick("profile")}
@@ -336,8 +332,14 @@ const Header = ({
                 )}
               </div>
             ) : (
-              // 로그인 버튼 비활성화
-              <></>
+              // 로그아웃 상태일 때 로그인 버튼 표시
+              <button
+                onClick={() => (window.location.href = "/login")}
+                className="flex items-center space-x-2 px-4 py-2 bg-accent-main-000 text-white rounded-lg hover:bg-accent-main-100 transition-colors duration-200 font-medium text-sm"
+              >
+                <LogOut size={16} className="rotate-180" />
+                <span>로그인</span>
+              </button>
             )}
           </div>
         </div>

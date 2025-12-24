@@ -51,8 +51,10 @@ function AppContent() {
   const navigate = useNavigate();
   const location = useLocation();
 
-  // 로그인 기능 비활성화 - 항상 로그인된 상태로 설정
-  const [isLoggedIn, setIsLoggedIn] = useState(true);
+  // localStorage에서 상태 복원
+  const [isLoggedIn, setIsLoggedIn] = useState(() => {
+    return localStorage.getItem("isLoggedIn") === "true";
+  });
   const [userRole, setUserRole] = useState(() => {
     return localStorage.getItem("userRole") || "user";
   });
@@ -111,8 +113,8 @@ function AppContent() {
   const handleStartChat = (message) => {
     console.log("🚀 handleStartChat called with:", message);
 
-    // 새 대화 ID 생성 (엔진_타임스탬프 형식)
-    const conversationId = `${selectedEngine}_${Date.now()}`;
+    // 새 대화 ID 생성 (UUID 형식)
+    const conversationId = crypto.randomUUID();
     console.log("🆕 새 대화 ID 생성:", conversationId);
 
     // localStorage에 임시 저장 (페이지 전환 중 데이터 보존)
@@ -205,9 +207,15 @@ function AppContent() {
         engine === "11" ? "막연한 아이디어 → 데스크 OK 일보" : "일보와 팩트 → 투명한 기사 초안",
     }));
 
-    // 로그인 체크 없이 바로 엔진 페이지로 이동
-    const enginePath = engine.toLowerCase();
-    navigate(`/${enginePath}`);
+    // 로그인 상태 확인
+    if (isLoggedIn) {
+      // 로그인되어 있으면 해당 엔진 페이지로 이동
+      const enginePath = engine.toLowerCase();
+      navigate(`/${enginePath}`);
+    } else {
+      // 로그인되어 있지 않으면 로그인 페이지로
+      navigate("/login", { state: { engine } });
+    }
   };
 
   const handleSignUp = () => {
@@ -261,8 +269,11 @@ function AppContent() {
     navigate(`/${enginePath}/chat`);
   };
 
-  // 사이드바 비활성화
-  const showSidebar = false;
+  // 사이드바를 보여줄 페이지 확인 (랜딩, 로그인, 회원가입, 대시보드, 구독, 프로필 제외)
+  const showSidebar =
+    !["/", "/login", "/signup", "/subscription", "/profile"].includes(
+      location.pathname
+    ) && !location.pathname.includes("/dashboard");
 
   return (
     <div
@@ -313,7 +324,6 @@ function AppContent() {
                   </PageTransition>
                 }
               />
-              {/* 로그인/회원가입 페이지 비활성화
               <Route
                 path="/login"
                 element={
@@ -333,7 +343,6 @@ function AppContent() {
                   />
                 }
               />
-              */}
               <Route
                 path="/11/chat/:conversationId?"
                 element={
@@ -418,7 +427,6 @@ function AppContent() {
                   </ProtectedRoute>
                 }
               />
-              {/* 대시보드 페이지 비활성화
               <Route
                 path="/11/dashboard"
                 element={
@@ -445,7 +453,6 @@ function AppContent() {
                   </ProtectedRoute>
                 }
               />
-              */}
               <Route
                 path="/subscription"
                 element={

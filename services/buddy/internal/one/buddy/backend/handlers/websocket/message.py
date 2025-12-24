@@ -5,7 +5,7 @@ WebSocket 메시지 처리 Lambda 핸들러
 import json
 import boto3
 import logging
-from datetime import datetime
+from datetime import datetime, timezone, timedelta
 
 import sys
 import os
@@ -136,6 +136,30 @@ def handler(event, context):
                 }, apigateway_client)
                 
                 chunk_index += 1
+            
+            # 3.5. 웹 검색 출처 포맷팅 적용
+            try:
+                from lib.citation_formatter import CitationFormatter
+                formatter = CitationFormatter()
+                
+                # 출처가 없는 경우 포맷팅 적용
+                if "📚 출처:" not in total_response and "http" in total_response:
+                    formatted_response = formatter.format_response_with_citations(total_response)
+                    
+                    # 출처 섹션만 추가로 전송
+                    if formatted_response != total_response:
+                        citation_section = formatted_response[len(total_response):]
+                        send_message_to_client(connection_id, {
+                            'type': 'ai_chunk',
+                            'chunk': citation_section,
+                            'chunk_index': chunk_index,
+                            'timestamp': datetime.utcnow().isoformat() + 'Z'
+                        }, apigateway_client)
+                        total_response = formatted_response
+                        chunk_index += 1
+                        
+            except Exception as e:
+                logger.warning(f"Citation formatting failed: {str(e)}")
             
             # 4. 사용량 추적
             websocket_service.track_usage(

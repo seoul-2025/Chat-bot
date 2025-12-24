@@ -8,6 +8,7 @@ import os
 import sys
 import time
 import requests
+import uuid
 from typing import Dict, Any, Iterator, List, Optional
 from datetime import datetime, timezone, timedelta
 import boto3
@@ -36,6 +37,12 @@ TEMPERATURE = float(os.environ.get('TEMPERATURE', '0.3'))
 TOP_P = float(os.environ.get('TOP_P', '0.95'))
 TOP_K = int(os.environ.get('TOP_K', '40'))
 
+# 비용 계산 상수 (Claude Opus 4.5 기준, USD per 1M tokens)
+PRICE_INPUT = 5.0  # Base Input Tokens
+PRICE_OUTPUT = 25.0  # Output Tokens 
+PRICE_CACHE_WRITE = 10.0  # 1h Cache Writes
+PRICE_CACHE_READ = 0.50  # Cache Hits
+
 # Rate limit 설정
 RATE_LIMIT_DELAY = 1.0  # 요청 간 최소 대기 시간 (초)
 MAX_RETRIES = 3
@@ -50,6 +57,10 @@ class AnthropicClient:
         self.last_request_time = 0
         self.model_id = self._get_model_id()
         self.service_name = os.environ.get('SERVICE_NAME', 'buddy')  # 서비스 식별자
+        self.max_tokens = MAX_TOKENS
+        self.temperature = TEMPERATURE
+        # Usage 추적
+        self.last_usage = {}
         logger.info(f"AnthropicClient initialized with model: {self.model_id}, service: {self.service_name}")
     
     def _get_model_id(self) -> str:
@@ -108,13 +119,26 @@ class AnthropicClient:
             "user_id": self.service_name  # 'buddy' 서비스 식별
         }
     
-    def _make_request(self, messages: List[Dict], system: str, stream: bool = False, metadata: Optional[Dict] = None) -> Any:
-        """API 요청 실행"""
+    def _make_request(self, messages: List[Dict], system: str, stream: bool = False, metadata: Optional[Dict] = None, enable_web_search: bool = False, enable_caching: bool = True) -> Any:
+        """API 요청 실행 (프롬프트 캐싱 지원)"""
         headers = {
             "x-api-key": self.api_key,
             "anthropic-version": ANTHROPIC_API_VERSION,
-            "content-type": "application/json"
+            "content-type": "application/json",
+            "anthropic-beta": "prompt-caching-2024-07-31"  # 캐싱 베타 기능 활성화
         }
+        
+        # 프롬프트 캐싱 적용 (system만 캐싱)
+        if enable_caching:
+            # System prompt를 캐싱 가능한 형태로 변환
+            system_content = [{
+                "type": "text",
+                "text": system,
+                "cache_control": {"type": "ephemeral", "ttl": "1h"}  # 1시간 캐시
+            }]
+        else:
+            # 캐싱 비활성화 시 기본 형태
+            system_content = system
         
         # Claude 4.5 Opus는 temperature와 top_p를 동시에 사용할 수 없음
         body = {
@@ -122,9 +146,20 @@ class AnthropicClient:
             "max_tokens": MAX_TOKENS,
             "temperature": TEMPERATURE,  # temperature만 사용
             "messages": messages,
-            "system": system,
+            "system": system_content,
             "stream": stream
         }
+        
+        # 웹 검색 도구 활성화 (베타 기능)
+        if enable_web_search:
+            body["tools"] = [
+                {
+                    "type": "web_search_20250305",
+                    "name": "web_search",
+                    "max_uses": 5  # 최대 5번까지 웹 검색 허용
+                }
+            ]
+            logger.info("🔍 Web search tool enabled in API request")
         
         # top_k는 선택적으로 추가 (Claude 4.5 Opus에서 지원)
         if TOP_K > 0:
@@ -187,7 +222,8 @@ class AnthropicClient:
         user_message: str,
         system_prompt: str,
         conversation_history: Optional[List[Dict]] = None,
-        enable_caching: bool = True
+        enable_caching: bool = True,
+        enable_web_search: bool = False
     ) -> Iterator[str]:
         """
         스트리밍 응답 생성 (Bedrock 인터페이스와 호환)
@@ -197,6 +233,7 @@ class AnthropicClient:
             system_prompt: 시스템 프롬프트
             conversation_history: 대화 이력
             enable_caching: 캐싱 활성화 여부 (Anthropic API는 자동 캐싱)
+            enable_web_search: 웹 검색 도구 활성화 여부
         
         Yields:
             응답 텍스트 청크
@@ -205,18 +242,29 @@ class AnthropicClient:
         
         while retry_count < MAX_RETRIES:
             try:
+                # 동적 컨텍스트를 user_message에 추가
+                enhanced_user_message = self._create_dynamic_context() + user_message
+                
                 # 메시지 구성
                 messages = conversation_history if conversation_history else []
-                messages.append({"role": "user", "content": user_message})
+                messages.append({"role": "user", "content": enhanced_user_message})
                 
-                logger.info(f"📤 Calling Anthropic API with model: {self.model_id}, service: {self.service_name}")
+                # 웹 검색 활성화 체크
+                use_web_search = enable_web_search or os.environ.get('ENABLE_NATIVE_WEB_SEARCH', 'false').lower() == 'true'
                 
-                # API 호출 (스트리밍) - 메타데이터 포함
+                # System prompt 정적 변수 치환 (캐싱 최적화)
+                processed_system = self._replace_template_variables(system_prompt)
+                
+                logger.info(f"📤 Calling Anthropic API with model: {self.model_id}, service: {self.service_name}, web_search: {use_web_search}, caching: {enable_caching}")
+                
+                # API 호출 (스트리밍) - 메타데이터와 캐싱 포함
                 response = self._make_request(
                     messages=messages,
-                    system=system_prompt,
+                    system=processed_system,
                     stream=True,
-                    metadata={"user_id": self.service_name}  # buddy 서비스 식별
+                    metadata={"user_id": self.service_name},  # buddy 서비스 식별
+                    enable_web_search=use_web_search,
+                    enable_caching=enable_caching
                 )
                 
                 # 응답 체크
@@ -244,8 +292,35 @@ class AnthropicClient:
                                     message = data.get('message', {})
                                     usage = message.get('usage', {})
                                     if usage:
-                                        logger.info(f"📊 Token usage - input: {usage.get('input_tokens', 0)}, "
-                                                   f"output: {usage.get('output_tokens', 0)}")
+                                        # 캐시 관련 토큰 추출
+                                        cache_read = usage.get('cache_read_input_tokens', 0)
+                                        cache_write = usage.get('cache_creation_input_tokens', 0)
+                                        
+                                        # Usage 정보 저장
+                                        self.last_usage = {
+                                            'input_tokens': usage.get('input_tokens', 0),
+                                            'output_tokens': usage.get('output_tokens', 0),
+                                            'cache_read_input_tokens': cache_read,
+                                            'cache_creation_input_tokens': cache_write
+                                        }
+                                        
+                                        # 비용 계산 및 로깅
+                                        cost = self._calculate_cost(self.last_usage)
+                                        self.last_usage['total_cost'] = cost
+
+                                        # 캐시 HIT/MISS 판정 및 로깅
+                                        if cache_read > 0:
+                                            logger.info(f"🎯 PROMPT CACHE HIT! cache_read: {cache_read} tokens")
+                                            # 비용 절감 계산 (캐시 읽기는 90% 할인)
+                                            savings = (cache_read / 1_000_000) * (PRICE_INPUT - PRICE_CACHE_READ)
+                                            logger.info(f"💵 Estimated savings from cache: ${savings:.6f}")
+                                        elif cache_write > 0:
+                                            logger.info(f"📝 PROMPT CACHE MISS - cache_write: {cache_write} tokens (next request will hit)")
+
+                                        logger.info(f"💰 Token Usage: input={usage.get('input_tokens', 0)}, "
+                                                   f"output={usage.get('output_tokens', 0)}, "
+                                                   f"cache_read={cache_read}, cache_write={cache_write}")
+                                        logger.info(f"💰 API Cost: ${cost:.6f}")
                                 
                                 # 컨텐츠 델타
                                 elif data.get('type') == 'content_block_delta':
@@ -302,7 +377,8 @@ class AnthropicClient:
         user_role: str = 'user',
         guidelines: Optional[str] = None,
         description: Optional[str] = None,
-        files: Optional[List[Dict]] = None
+        files: Optional[List[Dict]] = None,
+        enable_web_search: bool = False
     ) -> Iterator[str]:
         """
         Bedrock 호환 인터페이스
@@ -358,19 +434,52 @@ class AnthropicClient:
             else:
                 yield f"\n\n[오류] 응답 생성 실패: {str(e)}"
     
-    def _create_message_with_context(self, user_message: str, conversation_context: str) -> str:
-        """대화 컨텍스트를 메시지에 포함"""
+    def _calculate_cost(self, usage: Dict[str, int]) -> float:
+        """비용 계산 (Claude Opus 4.5 기준)"""
+        cost_input = (usage.get('input_tokens', 0) / 1_000_000) * PRICE_INPUT
+        cost_output = (usage.get('output_tokens', 0) / 1_000_000) * PRICE_OUTPUT
+        cost_cache_write = (usage.get('cache_creation_input_tokens', 0) / 1_000_000) * PRICE_CACHE_WRITE
+        cost_cache_read = (usage.get('cache_read_input_tokens', 0) / 1_000_000) * PRICE_CACHE_READ
+        
+        return cost_input + cost_output + cost_cache_write + cost_cache_read
+    
+    def _create_dynamic_context(self) -> str:
+        """동적 컨텍스트 생성 (user_message에 추가용) - 캐싱 최적화를 위해 여기에만 동적 정보 포함"""
         # 한국 시간 (UTC+9)
         kst = timezone(timedelta(hours=9))
         current_time = datetime.now(kst)
-        
-        # 동적 컨텍스트 정보
-        context_info = f"""[현재 세션 정보]
-현재 시간: {current_time.strftime('%Y-%m-%d %H:%M:%S KST')}
-사용자 위치: 대한민국
-타임존: Asia/Seoul (KST)
 
-※ 시간 관련 질문이 있으면 위의 현재 시간을 참조하세요.
+        return f"""[⚠️ 중요: 현재 세션 정보 - 반드시 참고하세요]
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+📅 현재 연도: {current_time.year}년
+📅 오늘 날짜: {current_time.strftime('%Y년 %m월 %d일')}
+🕐 현재 시간: {current_time.strftime('%Y-%m-%d %H:%M:%S KST')}
+📍 사용자 위치: 대한민국 (Asia/Seoul)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+⚠️ 중요: 응답에서 날짜나 연도를 언급할 때 반드시 위의 현재 날짜 정보를 사용하세요.
+2024년이라고 하지 마세요. 현재는 {current_time.year}년입니다.
+
+"""
+    
+    def _replace_template_variables(self, prompt: str) -> str:
+        """정적 값만 치환 (캐싱 최적화)"""
+        replacements = {
+            '{{user_location}}': '대한민국',
+            '{{timezone}}': 'Asia/Seoul (KST)'
+        }
+        
+        for key, value in replacements.items():
+            prompt = prompt.replace(key, value)
+        
+        return prompt
+    
+    def _create_message_with_context(self, user_message: str, conversation_context: str) -> str:
+        """대화 컨텍스트를 메시지에 포함 (동적 컨텍스트만)"""
+        # 동적 컨텍스트는 user_message에만 추가 (캐시 무효화 방지)
+        dynamic_context = self._create_dynamic_context()
+        
+        context_info = f"""{dynamic_context}
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
 """

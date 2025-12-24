@@ -13,6 +13,7 @@ sys.path.append(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(
 
 from services.websocket_service import WebSocketService
 from utils.logger import setup_logger
+from lib.citation_formatter import CitationFormatter
 
 logger = setup_logger(__name__)
 
@@ -116,7 +117,22 @@ def handler(event, context):
                 
                 chunk_index += 1
             
-            # 4. 사용량 추적
+            # 4. Citation 포맷팅 적용 (웹 검색 결과가 있을 경우)
+            if "http" in total_response and "📚 출처:" not in total_response:
+                try:
+                    formatted_response = CitationFormatter.format_response_with_citations(total_response)
+                    if formatted_response != total_response:
+                        logger.info("Citation formatting applied")
+                        # 포맷팅된 응답을 클라이언트에 전송
+                        send_message_to_client(connection_id, {
+                            'type': 'citation_update',
+                            'formatted_response': formatted_response,
+                            'timestamp': datetime.utcnow().isoformat() + 'Z'
+                        }, apigateway_client)
+                except Exception as e:
+                    logger.error(f"Citation formatting failed: {str(e)}")
+
+            # 5. 사용량 추적
             websocket_service.track_usage(
                 user_id=user_id,
                 engine_type=engine_type,
@@ -124,7 +140,7 @@ def handler(event, context):
                 output_text=total_response
             )
             
-            # 5. 완료 알림
+            # 6. 완료 알림
             send_message_to_client(connection_id, {
                 'type': 'chat_end',
                 'engine': engine_type,

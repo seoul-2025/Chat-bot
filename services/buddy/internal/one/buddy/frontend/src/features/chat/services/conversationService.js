@@ -6,12 +6,12 @@ class ConversationService {
     this.userId = this.getUserId();
   }
 
-  // 사용자 ID 가져오기 (인증된 사용자 정보 사용)
+  // 사용자 ID 가져오기 (인증된 사용자 정보 사용) - UUID 기반
   getUserId() {
     const userInfo = JSON.parse(localStorage.getItem("userInfo") || "{}");
-    // UUID(username)를 우선 사용하되, 없으면 userId 또는 email 사용
+    // Cognito sub (UUID)를 우선 사용 - DynamoDB 데이터와 일치
     return (
-      userInfo.username || userInfo.userId || userInfo.email || "anonymous"
+      userInfo.userId || userInfo.username || userInfo.email || "anonymous"
     );
   }
 
@@ -280,11 +280,11 @@ class ConversationService {
       );
       const conversationId =
         conversationData.conversationId || crypto.randomUUID();
-      const key = `conversation_${conversationData.engineType}_${conversationId}`;
 
-      // 이미 존재하는 대화인지 확인
+      // 이미 존재하는 대화인지 확인 (conversationId와 userId로 검색)
       const existingKey = Object.keys(conversations).find(
-        (k) => conversations[k].conversationId === conversationId
+        (k) => conversations[k].conversationId === conversationId && 
+               conversations[k].userId === this.userId
       );
 
       if (existingKey) {
@@ -295,8 +295,10 @@ class ConversationService {
           userId: this.userId,
           updatedAt: new Date().toISOString(),
         };
+        console.log("💾 기존 대화 업데이트:", conversationId);
       } else {
-        // 새로운 대화 생성
+        // 새로운 대화 생성 - 일관된 키 형식 사용
+        const key = `conversation_${conversationId}`;
         conversations[key] = {
           ...conversationData,
           conversationId,
@@ -304,10 +306,10 @@ class ConversationService {
           createdAt: new Date().toISOString(),
           updatedAt: new Date().toISOString(),
         };
+        console.log("💾 새 대화 생성:", conversationId);
       }
 
       localStorage.setItem("conversations", JSON.stringify(conversations));
-      // console.log("💾 localStorage에 저장:", existingKey ? "업데이트" : "신규");
     } catch (error) {
       console.error("localStorage 저장 실패:", error);
     }
@@ -380,9 +382,62 @@ class ConversationService {
     }
   }
 
+  // 중복 대화 정리 (localStorage 정리)
+  cleanupDuplicateConversations() {
+    try {
+      const conversations = JSON.parse(
+        localStorage.getItem("conversations") || "{}"
+      );
+      
+      const conversationMap = new Map();
+      const keysToDelete = [];
+      
+      // conversationId별로 그룹화하여 중복 찾기
+      Object.entries(conversations).forEach(([key, conv]) => {
+        const convId = conv.conversationId;
+        const userId = conv.userId;
+        const uniqueKey = `${userId}_${convId}`;
+        
+        if (conversationMap.has(uniqueKey)) {
+          // 중복 발견 - 더 최신 것을 유지
+          const existing = conversationMap.get(uniqueKey);
+          const existingTime = new Date(existing.conversation.updatedAt || existing.conversation.createdAt || 0);
+          const currentTime = new Date(conv.updatedAt || conv.createdAt || 0);
+          
+          if (currentTime > existingTime) {
+            // 현재 것이 더 최신 - 기존 것 삭제 예약
+            keysToDelete.push(existing.key);
+            conversationMap.set(uniqueKey, { key, conversation: conv });
+          } else {
+            // 기존 것이 더 최신 - 현재 것 삭제 예약
+            keysToDelete.push(key);
+          }
+        } else {
+          conversationMap.set(uniqueKey, { key, conversation: conv });
+        }
+      });
+      
+      // 중복된 키들 삭제
+      keysToDelete.forEach(key => {
+        delete conversations[key];
+      });
+      
+      localStorage.setItem("conversations", JSON.stringify(conversations));
+      console.log(`🧹 ${keysToDelete.length}개의 중복 대화 정리 완료`);
+      
+      return keysToDelete.length;
+    } catch (error) {
+      console.error("중복 대화 정리 실패:", error);
+      return 0;
+    }
+  }
+
   // 대화 동기화 (localStorage → DynamoDB)
   async syncConversations() {
     try {
+      // 먼저 중복 대화 정리
+      this.cleanupDuplicateConversations();
+      
       const localConversations = this.getFromLocalStorage();
       console.log(`🔄 ${localConversations.length}개 대화 동기화 시작`);
 
@@ -423,3 +478,4 @@ export const updateConversationTitle = (id, title) =>
 export const autoSaveConversation = (data) =>
   conversationService.autoSave(data);
 export const syncConversations = () => conversationService.syncConversations();
+export const cleanupDuplicateConversations = () => conversationService.cleanupDuplicateConversations();

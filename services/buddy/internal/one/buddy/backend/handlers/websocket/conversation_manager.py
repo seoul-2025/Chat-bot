@@ -24,34 +24,70 @@ class ConversationManager:
             timestamp = datetime.utcnow().isoformat() + 'Z'
             message_id = str(uuid.uuid4())
 
-            # user_id가 없으면 scan으로 찾기
-            if not user_id:
-                scan_response = conversations_table.scan(
-                    FilterExpression='conversationId = :cid',
-                    ExpressionAttributeValues={':cid': conversation_id}
-                )
-                if scan_response.get('Items'):
-                    user_id = scan_response['Items'][0].get('userId')
+            # conversationId-index GSI를 사용하여 기존 대화 조회
+            gsi_response = conversations_table.query(
+                IndexName='conversationId-index',
+                KeyConditionExpression='conversationId = :cid',
+                ExpressionAttributeValues={':cid': conversation_id},
+                Limit=1
+            )
 
-            # 기존 대화 조회
-            if user_id:
+            if gsi_response.get('Items'):
+                # 기존 대화가 있으면 원본 키로 조회하여 업데이트
+                existing_item = gsi_response['Items'][0]
+                existing_user_id = existing_item.get('userId')
+                user_id = user_id or existing_user_id  # user_id 우선, 없으면 기존 사용
+                
                 response = conversations_table.get_item(
-                    Key={'userId': user_id, 'conversationId': conversation_id}
+                    Key={'userId': existing_user_id, 'conversationId': conversation_id}
                 )
             else:
-                response = {'Item': None}
+                response = None
             
-            if 'Item' in response:
+            if response and 'Item' in response:
                 # 기존 대화에 메시지 추가
                 item = response['Item']
                 messages = item.get('messages', [])
-                messages.append({
-                    'id': message_id,
-                    'type': 'user' if role == 'user' else 'assistant',  # 프론트엔드 호환성
-                    'role': role,  # 백워드 호환성
-                    'content': content,
-                    'timestamp': timestamp
-                })
+                
+                # 중복 메시지 확인 - 개선된 알고리즘
+                # 1. 최근 5개 메시지에서 확인 (기존 3개에서 확장)
+                recent_messages = messages[-5:] if len(messages) > 5 else messages
+                is_duplicate = False
+                current_timestamp = datetime.fromisoformat(timestamp.replace('Z', '+00:00'))
+                
+                for msg in recent_messages:
+                    # 내용과 역할이 정확히 일치하고, 시간 차이가 30초 이내인 경우만 중복으로 판단
+                    if (msg.get('content') == content and 
+                        msg.get('role') == role):
+                        try:
+                            msg_timestamp = datetime.fromisoformat(msg.get('timestamp', '').replace('Z', '+00:00'))
+                            time_diff = abs((current_timestamp - msg_timestamp).total_seconds())
+                            
+                            # 30초 이내에 동일한 내용이면 중복으로 판단
+                            if time_diff <= 30:
+                                logger.info(f"Duplicate message detected (same content & role within 30s), skipping: {content[:50]}")
+                                is_duplicate = True
+                                break
+                            else:
+                                logger.info(f"Similar message found but time diff is {time_diff}s, allowing")
+                        except Exception as e:
+                            # 타임스탬프 파싱 실패 시 기존 방식으로 판단
+                            logger.warning(f"Timestamp parsing failed: {e}, using basic duplicate check")
+                            if msg.get('content') == content and msg.get('role') == role:
+                                is_duplicate = True
+                                break
+                
+                if not is_duplicate:
+                    messages.append({
+                        'id': message_id,
+                        'type': 'user' if role == 'user' else 'assistant',  # 프론트엔드 호환성
+                        'role': role,  # 백워드 호환성
+                        'content': content,
+                        'timestamp': timestamp
+                    })
+                else:
+                    logger.info(f"Skipping duplicate message for conversation {conversation_id}")
+                    return True  # 중복이지만 성공으로 처리
                 
                 # 최근 50개 메시지만 유지 (메모리 관리)
                 if len(messages) > 50:
@@ -105,19 +141,17 @@ class ConversationManager:
     def get_conversation_history(conversation_id: str, limit: int = 20):
         """대화 히스토리 조회"""
         try:
-            # conversation_id로 스캔하여 찾기
-            scan_response = conversations_table.scan(
-                FilterExpression='conversationId = :cid',
-                ExpressionAttributeValues={':cid': conversation_id}
+            # conversationId-index GSI 사용하여 효율적으로 조회
+            response = conversations_table.query(
+                IndexName='conversationId-index',
+                KeyConditionExpression='conversationId = :cid',
+                ExpressionAttributeValues={':cid': conversation_id},
+                Limit=1
             )
 
-            if scan_response.get('Items'):
-                response = {'Item': scan_response['Items'][0]}
-            else:
-                response = {}
-            
-            if 'Item' in response:
-                messages = response['Item'].get('messages', [])
+            if response.get('Items'):
+                item = response['Items'][0]
+                messages = item.get('messages', [])
                 # 최근 N개만 반환
                 return messages[-limit:] if len(messages) > limit else messages
             
@@ -133,22 +167,25 @@ class ConversationManager:
         try:
             timestamp = datetime.utcnow().isoformat() + 'Z'
 
-            # user_id가 없으면 scan으로 찾기
-            if not user_id:
-                scan_response = conversations_table.scan(
-                    FilterExpression='conversationId = :cid',
-                    ExpressionAttributeValues={':cid': conversation_id}
-                )
-                if scan_response.get('Items'):
-                    user_id = scan_response['Items'][0].get('userId')
-                    response = {'Item': scan_response['Items'][0]}
-                else:
-                    response = {}
-            else:
-                # 기존 대화 확인
+            # conversationId-index GSI를 사용하여 기존 대화 조회
+            gsi_response = conversations_table.query(
+                IndexName='conversationId-index',
+                KeyConditionExpression='conversationId = :cid',
+                ExpressionAttributeValues={':cid': conversation_id},
+                Limit=1
+            )
+
+            if gsi_response.get('Items'):
+                # 기존 대화가 있으면 원본 키로 조회하여 업데이트
+                existing_item = gsi_response['Items'][0]
+                existing_user_id = existing_item.get('userId')
+                user_id = user_id or existing_user_id  # user_id 우선, 없으면 기존 사용
+                
                 response = conversations_table.get_item(
-                    Key={'userId': user_id, 'conversationId': conversation_id}
+                    Key={'userId': existing_user_id, 'conversationId': conversation_id}
                 )
+            else:
+                response = {}
             
             if 'Item' in response:
                 # 업데이트
