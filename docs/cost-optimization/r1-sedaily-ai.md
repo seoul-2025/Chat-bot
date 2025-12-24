@@ -103,8 +103,8 @@ aws logs tail /aws/lambda/sedaily-column-websocket-message --region us-east-1 --
 ## Deployment
 
 ```bash
-cd /nexus/services/regression/external/two/backend/scripts
-./05-deploy-lambda.sh
+cd /nexus/services/regression/external/two
+./deploy-backend.sh
 ```
 
 ---
