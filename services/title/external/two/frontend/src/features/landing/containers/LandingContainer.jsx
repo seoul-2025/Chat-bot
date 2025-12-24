@@ -3,7 +3,6 @@ import LandingPresenter from '../presenters/LandingPresenter';
 import { useLanding } from '../hooks/useLanding';
 
 const LandingContainer = ({ onSelectEngine, userRole, onLogout, onLogin }) => {
-  console.log('🔍 LandingContainer props:', { onSelectEngine, userRole, onLogout, onLogin });
   const {
     isVisible,
     selectedEngine,

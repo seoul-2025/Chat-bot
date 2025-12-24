@@ -19,7 +19,13 @@ export const getPrompt = async (engineType) => {
     return data;
   } catch (error) {
     console.error('Error fetching prompt:', error);
-    throw error;
+    return {
+      prompt: {
+        description: '',
+        instructions: ''
+      },
+      files: []
+    };
   }
 };
 

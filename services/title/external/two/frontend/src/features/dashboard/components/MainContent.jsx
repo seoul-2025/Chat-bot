@@ -69,6 +69,10 @@ const MainContent = ({
         window.dispatchEvent(new CustomEvent("usageUpdated"));
       } catch (error) {
         console.error("Failed to load data:", error);
+        // 오류 발생 시 기본값 설정
+        setCurrentDescription("");
+        setEditDescription("");
+        setUsagePercentage(0);
       } finally {
         // 로딩 완료
         // setTimeout(() => setIsInitialLoad(false), 100);

@@ -1,8 +1,20 @@
 // API 엔드포인트는 환경변수로 관리
 const API_ENDPOINT = import.meta.env.VITE_PROMPT_API_URL || '';
+const USE_MOCK = import.meta.env.VITE_USE_MOCK === 'true';
 
 // 프롬프트 조회 (설명, 지침, 파일 목록)
 export const getPrompt = async (engineType) => {
+  if (USE_MOCK || !API_ENDPOINT) {
+    console.warn('Using mock data for prompt service');
+    return {
+      prompt: {
+        description: `${engineType} 엔진에 대한 설명입니다.`,
+        instruction: '기본 지침입니다.',
+        files: []
+      }
+    };
+  }
+
   try {
     const response = await fetch(`${API_ENDPOINT}/prompts/${engineType}`, {
       method: 'GET',
@@ -19,7 +31,14 @@ export const getPrompt = async (engineType) => {
     return data;
   } catch (error) {
     console.error('Error fetching prompt:', error);
-    throw error;
+    // Return mock data as fallback
+    return {
+      prompt: {
+        description: `${engineType} 엔진에 대한 설명입니다.`,
+        instruction: '기본 지침입니다.',
+        files: []
+      }
+    };
   }
 };
 
@@ -48,6 +67,11 @@ export const updatePrompt = async (engineType, updates) => {
 
 // 파일 목록 조회
 export const getFiles = async (engineType) => {
+  if (USE_MOCK || !API_ENDPOINT) {
+    console.warn('Using mock data for files service');
+    return [];
+  }
+
   try {
     const response = await fetch(`${API_ENDPOINT}/prompts/${engineType}/files`, {
       method: 'GET',
@@ -64,7 +88,7 @@ export const getFiles = async (engineType) => {
     return data.files || [];
   } catch (error) {
     console.error('Error fetching files:', error);
-    throw error;
+    return [];
   }
 };
 
