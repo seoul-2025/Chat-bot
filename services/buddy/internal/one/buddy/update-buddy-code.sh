@@ -14,9 +14,11 @@ REGION="us-east-1"
 # Lambda 함수 목록
 LAMBDA_FUNCTIONS=(
     "${SERVICE_NAME}-websocket-message-two"
-    "${SERVICE_NAME}-conversation-api-two" 
     "${SERVICE_NAME}-websocket-connect-two"
     "${SERVICE_NAME}-websocket-disconnect-two"
+    "${SERVICE_NAME}-conversation-api-two"
+    "${SERVICE_NAME}-prompt-crud-two"
+    "${SERVICE_NAME}-usage-handler-two"
 )
 
 echo "📦 배포 패키지 준비 중..."

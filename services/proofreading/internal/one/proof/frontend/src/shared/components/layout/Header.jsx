@@ -25,10 +25,10 @@ const Header = ({
   const [showUserDropdown, setShowUserDropdown] = useState(false);
   const userDropdownRef = useRef(null);
   
-  // 로그인 기능 비활성화 - 기본값 설정
-  const [userInfo, setUserInfo] = useState({ name: 'User', email: 'user@example.com' });
+  // 사용자 정보 가져오기
+  const [userInfo, setUserInfo] = useState(null);
   const [userRole, setUserRole] = useState('user');
-  const [isLoggedIn, setIsLoggedIn] = useState(false); // 로그인 UI 숨기기
+  const [isLoggedIn, setIsLoggedIn] = useState(false);
 
   useEffect(() => {
     const loadUserInfo = () => {
@@ -123,7 +123,16 @@ const Header = ({
       <div className="w-full px-4 sm:px-6 lg:px-8">
         <div className="flex items-center justify-between h-16 relative">
           <div className="flex items-center space-x-4">
-            {/* 사이드바 토글 버튼 비활성화 */}
+            {/* 사이드바 토글 버튼 - 사이드바가 닫혀있을 때만 표시 */}
+            {onToggleSidebar && !isSidebarOpen && (
+              <button 
+                className="p-2 rounded-md text-text-300 hover:bg-bg-300 hover:text-text-100 transition-colors"
+                onClick={onToggleSidebar}
+                aria-label="사이드바 열기"
+              >
+                <Menu size={24} />
+              </button>
+            )}
 
             {/* 홈 버튼 */}
             {onHome && (
@@ -191,7 +200,7 @@ const Header = ({
                 </div>
               </div>
             )} */}
-            {/* 대시보드 버튼 비활성화 */}
+            {/* 대시보드 버튼 숨김 처리 */}
 
             {isLoggedIn && userInfo ? (
               <div className="relative" ref={userDropdownRef}>
@@ -257,7 +266,7 @@ const Header = ({
                       </div>
                     </div>
                     <div className="py-1">
-                      {/* 대시보드 메뉴 비활성화 */}
+                      {/* 대시보드 메뉴 숨김 처리 */}
                       <button
                         className="flex items-center px-4 py-2 text-sm text-text-200 hover:bg-bg-200 w-full text-left transition-colors duration-150"
                         onClick={() => handleUserMenuClick("profile")}
@@ -288,7 +297,16 @@ const Header = ({
                   </div>
                 )}
               </div>
-            ) : null}
+            ) : (
+              // 로그아웃 상태일 때 로그인 버튼 표시
+              <button
+                onClick={() => window.location.href = '/login'}
+                className="flex items-center space-x-2 px-4 py-2 bg-accent-main-000 text-white rounded-lg hover:bg-accent-main-100 transition-colors duration-200 font-medium text-sm"
+              >
+                <LogOut size={16} className="rotate-180" />
+                <span>로그인</span>
+              </button>
+            )}
           </div>
         </div>
       </div>

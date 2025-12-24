@@ -13,7 +13,7 @@ import {
   PolarRadiusAxis, ResponsiveContainer, XAxis, YAxis, CartesianGrid,
   Tooltip, Legend, RadialBarChart, RadialBar
 } from "recharts";
-import usageService from "../services/usageService";
+import usageService from "../../../shared/services/usageService";
 
 // 엔진명을 URL 경로로 매핑하는 헬퍼 함수
 const getEnginePathFromName = (engineName) => {
@@ -321,7 +321,6 @@ const Dashboard = ({ selectedEngine = "Basic", onBack }) => {
               <div>
                 <h1 className="text-lg sm:text-2xl font-bold text-text-100 whitespace-nowrap">
                   {selectedEngine === 'Basic' ? '비즈니스 모드' : '종합 뉴스 모드'} 사용량
-                  <span className="hidden sm:inline"> 대시보드</span>
                 </h1>
                 <div className="flex items-center gap-2 mt-0.5 sm:mt-1">
                   <p className="text-xs sm:text-sm text-text-300 hidden sm:block">실시간 사용량 분석</p>

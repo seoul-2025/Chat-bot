@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import usageService from '../../chat/services/usageService';
+import usageService from '../../../shared/services/usageService';
 
 export const useDashboard = (userRole) => {
   // 상태 관리

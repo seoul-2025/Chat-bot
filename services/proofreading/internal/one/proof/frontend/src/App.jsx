@@ -38,8 +38,10 @@ function AppContent() {
   const navigate = useNavigate();
   const location = useLocation();
   
-  // 로그인 기능 비활성화 - 항상 로그인 상태로 설정
-  const [isLoggedIn, setIsLoggedIn] = useState(true);
+  // localStorage에서 상태 복원
+  const [isLoggedIn, setIsLoggedIn] = useState(() => {
+    return localStorage.getItem('isLoggedIn') === 'true';
+  });
   const [userRole, setUserRole] = useState(() => {
     return localStorage.getItem('userRole') || "user";
   });
@@ -167,9 +169,15 @@ function AppContent() {
       title: engine === 'Basic' ? '빠르고 정확한 교열' : '정밀하고 세밀한 교정',
     }));
     
-    // 로그인 비활성화 - 바로 엔진 페이지로 이동
-    const enginePath = getEnginePathFromName(engine);
-    navigate(`/${enginePath}`);
+    // 로그인 상태 확인
+    if (isLoggedIn) {
+      // 로그인되어 있으면 해당 엔진 페이지로 이동
+      const enginePath = getEnginePathFromName(engine);
+      navigate(`/${enginePath}`);
+    } else {
+      // 로그인되어 있지 않으면 로그인 페이지로
+      navigate("/login", { state: { engine } });
+    }
   };
 
   const handleSignUp = () => {
@@ -231,12 +239,20 @@ function AppContent() {
         color: "hsl(var(--text-100))",
       }}
     >
-      {/* 사이드바 비활성화 */}
+      {/* Sidebar - show on all pages except landing, login, signup */}
+      {showSidebar && (
+        <Sidebar 
+          ref={sidebarRef}
+          selectedEngine={selectedEngine}
+          isOpen={isSidebarOpen}
+          onToggle={toggleSidebar}
+        />
+      )}
       
       <motion.div 
         className="min-h-full w-full min-w-0 flex-1"
         animate={{ 
-          marginLeft: 0 
+          marginLeft: showSidebar && isSidebarOpen && window.innerWidth >= 768 ? 288 : 0 
         }}
         transition={{
           type: "tween",
@@ -259,9 +275,25 @@ function AppContent() {
                   </PageTransition>
                 } 
               />
-          {/* 로그인/회원가입 비활성화 - 루트로 리다이렉트 */}
-          <Route path="/login" element={<Navigate to="/" replace />} />
-          <Route path="/signup" element={<Navigate to="/" replace />} />
+          <Route 
+            path="/login" 
+            element={
+              <LoginPage 
+                onLogin={handleLogin} 
+                onGoToSignUp={handleGoToSignUp}
+                selectedEngine={location.state?.engine || selectedEngine}
+              />
+            } 
+          />
+          <Route 
+            path="/signup" 
+            element={
+              <SignUpPage
+                onSignUp={handleSignUp}
+                onBackToLogin={handleBackToLogin}
+              />
+            } 
+          />
             <Route
               path="/11/chat/:conversationId?"
               element={

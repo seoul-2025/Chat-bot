@@ -12,8 +12,8 @@ import {
   autoSaveConversation,
   getConversation,
 } from '../services/conversationService';
-import { updateLocalUsage, fetchUsageFromServer } from '../services/usageService';
-import * as usageService from '../services/usageService';
+import { updateLocalUsage, fetchUsageFromServer } from '../../../shared/services/usageService';
+import * as usageService from '../../../shared/services/usageService';
 
 export const useChat = (initialMessage, selectedEngine = "Basic") => {
   const { conversationId } = useParams();

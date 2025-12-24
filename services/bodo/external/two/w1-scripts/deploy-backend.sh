@@ -130,8 +130,7 @@ main() {
     echo ""
     echo "Next steps:"
     echo "1. Test the service at https://w1.sedaily.ai"
-    echo "2. Monitor logs: ./monitor-logs.sh"
-    echo "3. Run tests: ./test-service.sh"
+    echo "2. Monitor logs: aws logs tail /aws/lambda/w1-websocket-message --follow"
 }
 
 main "$@"

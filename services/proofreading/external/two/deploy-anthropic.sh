@@ -32,9 +32,11 @@ fi
 # Lambda 함수 이름 (실제 함수명)
 LAMBDA_FUNCTIONS=(
     "nx-wt-prf-websocket-message"
-    "nx-wt-prf-conversation-api"
     "nx-wt-prf-websocket-connect"
     "nx-wt-prf-websocket-disconnect"
+    "nx-wt-prf-conversation-api"
+    "nx-wt-prf-prompt-crud"
+    "nx-wt-prf-usage-handler"
 )
 
 echo ""
@@ -131,12 +133,14 @@ echo -e "${BLUE}5. Lambda 환경 변수 업데이트 중...${NC}"
 ENV_VARS=$(cat <<EOF
 {
     "USE_ANTHROPIC_API": "${USE_ANTHROPIC_API:-true}",
-    "ANTHROPIC_SECRET_NAME": "${ANTHROPIC_SECRET_NAME:-claude-opus-45-api-key}",
+    "ANTHROPIC_SECRET_NAME": "${ANTHROPIC_SECRET_NAME:-proof-v1}",
     "ANTHROPIC_MODEL_ID": "${ANTHROPIC_MODEL_ID:-claude-opus-4-5-20251101}",
     "AI_PROVIDER": "${AI_PROVIDER:-anthropic_api}",
     "FALLBACK_TO_BEDROCK": "${FALLBACK_TO_BEDROCK:-true}",
     "ANTHROPIC_MAX_TOKENS": "${ANTHROPIC_MAX_TOKENS:-4096}",
-    "ANTHROPIC_TEMPERATURE": "${ANTHROPIC_TEMPERATURE:-0.7}"
+    "ANTHROPIC_TEMPERATURE": "${ANTHROPIC_TEMPERATURE:-0.7}",
+    "ENABLE_NATIVE_WEB_SEARCH": "${ENABLE_NATIVE_WEB_SEARCH:-true}",
+    "WEB_SEARCH_MAX_USES": "${WEB_SEARCH_MAX_USES:-5}"
 }
 EOF
 )
@@ -181,7 +185,7 @@ if aws lambda get-function --function-name $FIRST_FUNC --region $AWS_REGION &>/d
       "Action": [
         "secretsmanager:GetSecretValue"
       ],
-      "Resource": "arn:aws:secretsmanager:$AWS_REGION:*:secret:claude-opus-45-api-key-*"
+      "Resource": "arn:aws:secretsmanager:$AWS_REGION:*:secret:proof-v1*"
     }
   ]
 }

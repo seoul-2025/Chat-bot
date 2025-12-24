@@ -15,13 +15,6 @@ S3_BUCKET="p2-two-frontend"
 CLOUDFRONT_ID="E2WPOE6AL2G5DZ"
 REGION="us-east-1"
 
-# 현재 디렉토리 확인
-CURRENT_DIR=$(pwd)
-if [[ ! "$CURRENT_DIR" == *"buddy/external/two"* ]]; then
-    echo "❌ buddy/external/two 프로젝트 디렉토리에서 실행해주세요."
-    exit 1
-fi
-
 # frontend 디렉토리로 이동
 cd frontend
 

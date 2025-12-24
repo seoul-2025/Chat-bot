@@ -1,5 +1,6 @@
 // 사용량 추적 서비스 (DynamoDB 연동)
-import { API_BASE_URL } from "../../../config";
+// Shared service for chat and dashboard features
+import { API_BASE_URL } from "../../config";
 
 // Usage API 전용 엔드포인트 (DynamoDB 연동)
 const USAGE_API_BASE_URL = import.meta.env.VITE_USAGE_API_URL || '';
@@ -8,21 +9,13 @@ const USAGE_API_BASE_URL = import.meta.env.VITE_USAGE_API_URL || '';
 const getCurrentUser = () => {
   try {
     const userInfo = JSON.parse(localStorage.getItem("userInfo") || "{}");
-    // userPlan이 있으면 우선 사용, 없으면 userRole 기반 판단
     let userPlan = localStorage.getItem("userPlan");
     if (!userPlan) {
-      // userRole이 admin이면 premium, 그 외는 free
       userPlan = localStorage.getItem("userRole") === "admin" ? "premium" : "free";
     }
-    
-    console.log("🔍 사용자 정보:", {
-      userId: userInfo.username || userInfo.email,
-      userRole: localStorage.getItem("userRole"),
-      userPlan: userPlan
-    });
-    
+
     return {
-      userId: userInfo.username || userInfo.email || "anonymous",  // UUID 우선 사용
+      userId: userInfo.username || userInfo.email || "anonymous",
       plan: userPlan,
     };
   } catch (error) {
@@ -41,7 +34,7 @@ const getAuthHeaders = () => {
   return headers;
 };
 
-// 플랜별 제한 설정 (서버에서 가져올 수도 있음)
+// 플랜별 제한 설정
 const PLAN_LIMITS = {
   free: {
     T5: {
@@ -85,8 +78,6 @@ const PLAN_LIMITS = {
 export const estimateTokens = (text) => {
   if (!text) return 0;
 
-  // 한글: 평균 2-3자당 1토큰
-  // 영어: 평균 4자당 1토큰
   const koreanChars = (text.match(/[가-힣]/g) || []).length;
   const englishChars = (text.match(/[a-zA-Z]/g) || []).length;
   const otherChars = text.length - koreanChars - englishChars;
@@ -112,7 +103,6 @@ export const getUserProfile = () => {
   try {
     const stored = localStorage.getItem(USER_PROFILE_KEY);
     if (!stored) {
-      // 기본값 (서버에서 가져와야 함)
       return {
         userId: localStorage.getItem("userId") || "anonymous",
         currentPlan: "free",
@@ -140,8 +130,8 @@ export const setUserPlan = (plan) => {
 
 // 사용량 데이터 초기화
 const initializeUsageData = () => {
-  const currentMonth = new Date().toISOString().slice(0, 7); // YYYY-MM
-  const today = new Date().toISOString().slice(0, 10); // YYYY-MM-DD
+  const currentMonth = new Date().toISOString().slice(0, 7);
+  const today = new Date().toISOString().slice(0, 10);
   const userProfile = getUserProfile();
   const planLimits = PLAN_LIMITS[userProfile.currentPlan] || PLAN_LIMITS.free;
 
@@ -149,22 +139,10 @@ const initializeUsageData = () => {
     T5: {
       period: currentMonth,
       planType: userProfile.currentPlan,
-      tokens: {
-        input: 0,
-        output: 0,
-        total: 0,
-      },
-      characters: {
-        input: 0,
-        output: 0,
-      },
+      tokens: { input: 0, output: 0, total: 0 },
+      characters: { input: 0, output: 0 },
       messageCount: 0,
-      dailyUsage: {
-        [today]: {
-          tokens: 0,
-          messages: 0,
-        },
-      },
+      dailyUsage: { [today]: { tokens: 0, messages: 0 } },
       limits: planLimits.T5,
       firstUsedAt: null,
       lastUsedAt: null,
@@ -172,22 +150,10 @@ const initializeUsageData = () => {
     H8: {
       period: currentMonth,
       planType: userProfile.currentPlan,
-      tokens: {
-        input: 0,
-        output: 0,
-        total: 0,
-      },
-      characters: {
-        input: 0,
-        output: 0,
-      },
+      tokens: { input: 0, output: 0, total: 0 },
+      characters: { input: 0, output: 0 },
       messageCount: 0,
-      dailyUsage: {
-        [today]: {
-          tokens: 0,
-          messages: 0,
-        },
-      },
+      dailyUsage: { [today]: { tokens: 0, messages: 0 } },
       limits: planLimits.H8,
       firstUsedAt: null,
       lastUsedAt: null,
@@ -198,21 +164,17 @@ const initializeUsageData = () => {
 // 로컬 사용량 데이터 가져오기
 export const getLocalUsageData = () => {
   try {
-    // 먼저 백업 데이터 확인 (실제 사용량)
     const backup = localStorage.getItem(USAGE_KEY + "_backup");
     if (backup) {
       try {
-        const backupData = JSON.parse(backup);
-        // 백업 데이터가 있으면 우선 사용
-        return backupData;
+        return JSON.parse(backup);
       } catch (e) {
-        console.log("백업 데이터 파싱 실패");
+        // 백업 파싱 실패
       }
     }
 
     const stored = localStorage.getItem(USAGE_KEY);
     if (!stored) {
-      // 초기화하되, 기존 백업 데이터가 있는지 한 번 더 확인
       const existingBackup = localStorage.getItem(USAGE_KEY + "_backup");
       if (existingBackup) {
         return JSON.parse(existingBackup);
@@ -226,14 +188,12 @@ export const getLocalUsageData = () => {
     const data = JSON.parse(stored);
     const currentMonth = new Date().toISOString().slice(0, 7);
 
-    // 월이 바뀌었으면 초기화
     if (data.T5?.period !== currentMonth) {
       const newData = initializeUsageData();
       localStorage.setItem(USAGE_KEY, JSON.stringify(newData));
       return newData;
     }
 
-    // 플랜 변경 체크 및 제한 업데이트
     const userProfile = getUserProfile();
     const planLimits = PLAN_LIMITS[userProfile.currentPlan] || PLAN_LIMITS.free;
 
@@ -261,7 +221,6 @@ export const checkUsageLimit = (engineType, additionalTokens = 0) => {
 
   if (!engine) return { allowed: false, reason: "잘못된 엔진 타입" };
 
-  // 월간 토큰 제한 체크
   if (engine.tokens.total + additionalTokens > engine.limits.monthlyTokens) {
     return {
       allowed: false,
@@ -270,7 +229,6 @@ export const checkUsageLimit = (engineType, additionalTokens = 0) => {
     };
   }
 
-  // 일일 메시지 제한 체크
   const todayUsage = engine.dailyUsage[today] || { messages: 0 };
   if (todayUsage.messages >= engine.limits.dailyMessages) {
     return {
@@ -280,7 +238,6 @@ export const checkUsageLimit = (engineType, additionalTokens = 0) => {
     };
   }
 
-  // 메시지당 토큰 제한 체크
   if (additionalTokens > engine.limits.maxTokensPerMessage) {
     return {
       allowed: false,
@@ -301,13 +258,6 @@ export const updateLocalUsage = async (engineType, inputText, outputText) => {
   try {
     const user = getCurrentUser();
 
-    console.log(`📊 ${engineType} 사용량 업데이트 시도:`, {
-      userId: user.userId,
-      inputLength: inputText?.length || 0,
-      outputLength: outputText?.length || 0,
-    });
-
-    // DynamoDB API 호출
     const response = await fetch(`${USAGE_API_BASE_URL}/usage/update`, {
       method: "POST",
       headers: getAuthHeaders(),
@@ -327,19 +277,10 @@ export const updateLocalUsage = async (engineType, inputText, outputText) => {
     const result = await response.json();
 
     if (result.success) {
-      console.log(`✅ ${engineType} 사용량 업데이트 성공:`, {
-        tokensUsed: result.tokensUsed,
-        percentage: result.percentage,
-        remaining: result.remaining,
-      });
-
-      // 로컬 백업용으로 저장 (오프라인 대비)
       const backupData = getLocalUsageData();
       if (result.usage) {
-        // API 응답의 사용량 데이터를 로컬 형식으로 변환
         backupData[engineType] = {
-          period:
-            result.usage.yearMonth || new Date().toISOString().slice(0, 7),
+          period: result.usage.yearMonth || new Date().toISOString().slice(0, 7),
           planType: result.usage.userPlan || user.plan,
           tokens: {
             input: result.usage.inputTokens || 0,
@@ -360,12 +301,10 @@ export const updateLocalUsage = async (engineType, inputText, outputText) => {
           lastUsedAt: result.usage.lastUsedAt || result.usage.updatedAt,
         };
 
-        // 로컬 스토리지 업데이트
         localStorage.setItem(USAGE_KEY, JSON.stringify(backupData));
         localStorage.setItem(USAGE_KEY + "_backup", JSON.stringify(backupData));
       }
 
-      // 실제 퍼센티지 계산 (API 응답 기반)
       const actualPercentage =
         result.percentage !== undefined
           ? result.percentage
@@ -382,7 +321,6 @@ export const updateLocalUsage = async (engineType, inputText, outputText) => {
         usage: result.usage,
       };
     } else {
-      console.warn(`⚠️ ${engineType} 사용량 제한:`, result.error);
       return {
         success: false,
         reason: result.error,
@@ -391,9 +329,6 @@ export const updateLocalUsage = async (engineType, inputText, outputText) => {
     }
   } catch (error) {
     console.error("사용량 업데이트 실패:", error);
-
-    // API 실패 시 로컬 백업 사용
-    console.log("🔄 로컬 백업으로 전환");
     return updateLocalUsageBackup(engineType, inputText, outputText);
   }
 };
@@ -406,18 +341,15 @@ const updateLocalUsageBackup = (engineType, inputText, outputText) => {
     const today = new Date().toISOString().slice(0, 10);
 
     if (!engine) {
-      console.error(`잘못된 엔진 타입: ${engineType}`);
       return { success: false, reason: "잘못된 엔진 타입" };
     }
 
-    // 토큰 및 글자 수 계산
     const inputTokens = estimateTokens(inputText);
     const outputTokens = estimateTokens(outputText);
     const totalTokens = inputTokens + outputTokens;
     const inputChars = countCharacters(inputText);
     const outputChars = countCharacters(outputText);
 
-    // 사용량 제한 체크
     const limitCheck = checkUsageLimit(engineType, totalTokens);
     if (!limitCheck.allowed) {
       return {
@@ -427,46 +359,31 @@ const updateLocalUsageBackup = (engineType, inputText, outputText) => {
       };
     }
 
-    // 토큰 업데이트
     engine.tokens.input += inputTokens;
     engine.tokens.output += outputTokens;
     engine.tokens.total += totalTokens;
-
-    // 글자 수 업데이트
     engine.characters.input += inputChars;
     engine.characters.output += outputChars;
-
-    // 메시지 카운트 업데이트
     engine.messageCount += 1;
 
-    // 일일 사용량 업데이트
     if (!engine.dailyUsage[today]) {
       engine.dailyUsage[today] = { tokens: 0, messages: 0 };
     }
     engine.dailyUsage[today].tokens += totalTokens;
     engine.dailyUsage[today].messages += 1;
 
-    // 시간 업데이트
     const now = new Date().toISOString();
     if (!engine.firstUsedAt) {
       engine.firstUsedAt = now;
     }
     engine.lastUsedAt = now;
 
-    // 로컬 백업 저장
     localStorage.setItem(USAGE_KEY + "_backup", JSON.stringify(usageData));
 
-    console.log(`💾 ${engineType} 로컬 백업 업데이트:`, {
-      inputTokens,
-      outputTokens,
-      totalTokens: engine.tokens.total,
-    });
-
-    // 비동기로 퍼센티지 계산
     const percentage = Math.round(
       (engine.tokens.total / engine.limits.monthlyTokens) * 100
     );
-    
+
     return {
       success: true,
       usage: engine,
@@ -480,24 +397,21 @@ const updateLocalUsageBackup = (engineType, inputText, outputText) => {
   }
 };
 
-// 사용량 퍼센티지 계산 (async로 변경 - 서버 데이터 우선)
+// 사용량 퍼센티지 계산 (async - 서버 데이터 우선)
 export const getUsagePercentage = async (engineType, forceRefresh = false) => {
   try {
-    // 캐시 체크 (5초간만 유효 - 매우 짧게)
     const cacheKey = `usage_percentage_${engineType}`;
     const cacheTime = `usage_percentage_time_${engineType}`;
     const cachedValue = localStorage.getItem(cacheKey);
     const cachedTime = localStorage.getItem(cacheTime);
-    
+
     if (!forceRefresh && cachedValue && cachedTime) {
       const timeDiff = Date.now() - parseInt(cachedTime);
-      if (timeDiff < 5000) { // 5초 이내면 캐시 사용
-        console.log(`📦 캐시된 사용량 반환: ${cachedValue}%`);
+      if (timeDiff < 5000) {
         return parseInt(cachedValue);
       }
     }
-    
-    // 서버에서 최신 데이터 가져오기
+
     const user = getCurrentUser();
     const response = await fetch(
       `${USAGE_API_BASE_URL}/usage/${user.userId}/${engineType}`,
@@ -505,55 +419,42 @@ export const getUsagePercentage = async (engineType, forceRefresh = false) => {
         headers: getAuthHeaders(),
       }
     );
-    
+
     if (response.ok) {
       const result = await response.json();
       if (result.success && result.data) {
         const totalTokens = result.data.totalTokens || 0;
         const limits = PLAN_LIMITS[user.plan]?.[engineType] || PLAN_LIMITS.free[engineType];
-        
-        console.log(`🔍 사용량 계산:`, {
-          userId: user.userId,
-          userPlan: user.plan,
-          userRole: localStorage.getItem("userRole"),
-          engineType,
-          totalTokens,
-          monthlyLimit: limits.monthlyTokens,
-          calculation: `${totalTokens} / ${limits.monthlyTokens} * 100`
-        });
-        
+
         const percentage = Math.round(
           (totalTokens / limits.monthlyTokens) * 100
         );
         const finalPercentage = Math.min(percentage, 100);
-        
-        // 캐시 저장
+
         localStorage.setItem(cacheKey, finalPercentage.toString());
         localStorage.setItem(cacheTime, Date.now().toString());
-        
+
         return finalPercentage;
       }
     }
-    
-    // 서버 요청 실패시 로컬 데이터 사용
+
     const usageData = getLocalUsageData();
     const engine = usageData[engineType];
-    
+
     if (!engine || !engine.limits) return 0;
-    
+
     const percentage = Math.round(
       (engine.tokens.total / engine.limits.monthlyTokens) * 100
     );
     return Math.min(percentage, 100);
   } catch (error) {
     console.error('사용량 퍼센티지 조회 실패:', error);
-    
-    // 오류 시 로컬 데이터 사용
+
     const usageData = getLocalUsageData();
     const engine = usageData[engineType];
-    
+
     if (!engine || !engine.limits) return 0;
-    
+
     const percentage = Math.round(
       (engine.tokens.total / engine.limits.monthlyTokens) * 100
     );
@@ -561,7 +462,7 @@ export const getUsagePercentage = async (engineType, forceRefresh = false) => {
   }
 };
 
-// 사용량 요약 정보 가져오기 (async로 변경)
+// 사용량 요약 정보 가져오기 (async)
 export const getUsageSummary = async (engineType) => {
   const usageData = getLocalUsageData();
   const engine = usageData[engineType];
@@ -573,10 +474,7 @@ export const getUsageSummary = async (engineType) => {
   const percentage = await getUsagePercentage(engineType);
 
   return {
-    // 퍼센티지
     percentage,
-
-    // 토큰 정보
     tokens: {
       used: engine.tokens.total,
       limit: engine.limits.monthlyTokens,
@@ -584,15 +482,11 @@ export const getUsageSummary = async (engineType) => {
       input: engine.tokens.input,
       output: engine.tokens.output,
     },
-
-    // 글자 수 정보
     characters: {
       input: engine.characters.input,
       output: engine.characters.output,
       total: engine.characters.input + engine.characters.output,
     },
-
-    // 메시지 정보
     messages: {
       total: engine.messageCount,
       todayCount: todayUsage.messages,
@@ -602,14 +496,10 @@ export const getUsageSummary = async (engineType) => {
         engine.limits.dailyMessages - todayUsage.messages
       ),
     },
-
-    // 플랜 정보
     plan: {
       type: engine.planType,
       limits: engine.limits,
     },
-
-    // 시간 정보
     period: engine.period,
     lastUsed: engine.lastUsedAt,
     firstUsed: engine.firstUsedAt,
@@ -675,7 +565,6 @@ export const fetchUsageFromServer = async (userId, engineType) => {
 
     const data = await response.json();
 
-    // 로컬 스토리지와 동기화
     const localData = getLocalUsageData();
     localData[engineType] = {
       ...localData[engineType],
@@ -720,17 +609,12 @@ export const updateUsageOnServer = async (userId, engineType, usageData) => {
 
 // 로컬 스토리지 사용량 캐시 정리
 export const clearUsageCache = () => {
-  // 대시보드에서 사용하는 캐시 정리
   localStorage.removeItem('user_usage_data');
   localStorage.removeItem('usage_data_timestamp');
-  
-  // 퍼센티지 캐시도 정리
   localStorage.removeItem('usage_percentage_T5');
   localStorage.removeItem('usage_percentage_time_T5');
   localStorage.removeItem('usage_percentage_H8');
   localStorage.removeItem('usage_percentage_time_H8');
-  
-  console.log('🗑️ 사용량 캐시 정리 완료');
 };
 
 // 플랜 변경
@@ -739,7 +623,6 @@ export const changePlan = async (newPlan) => {
     const token = localStorage.getItem("access_token");
     const userId = localStorage.getItem("userId");
 
-    // 서버에 플랜 변경 요청
     const response = await fetch(`${USAGE_API_BASE_URL}/user/plan`, {
       method: "PUT",
       headers: {
@@ -757,10 +640,8 @@ export const changePlan = async (newPlan) => {
       throw new Error("플랜 변경 실패");
     }
 
-    // 로컬 프로필 업데이트
     setUserPlan(newPlan);
 
-    // 사용량 데이터 리셋 (선택적)
     const usageData = getLocalUsageData();
     localStorage.setItem(USAGE_KEY, JSON.stringify(usageData));
 
@@ -783,9 +664,6 @@ export const getAllUsageData = async (forceRefresh = false) => {
   try {
     const user = getCurrentUser();
 
-    console.log(`📊 전체 사용량 데이터 조회: ${user.userId}`);
-
-    // T5와 H8 각각 호출
     const [basicResponse, proResponse] = await Promise.all([
       fetch(
         `${USAGE_API_BASE_URL}/usage/${encodeURIComponent(user.userId)}/T5`,
@@ -806,14 +684,9 @@ export const getAllUsageData = async (forceRefresh = false) => {
     const basicResult = await basicResponse.json();
     const proResult = await proResponse.json();
 
-    console.log("📊 T5 응답:", basicResult);
-    console.log("📊 H8 응답:", proResult);
-
-    // 엔진별 데이터 정리
     const basicData = basicResult.success ? basicResult.data : null;
     const proData = proResult.success ? proResult.data : null;
 
-    // 대시보드 호환 형식으로 변환
     return {
       userId: user.userId,
       userPlan: user.plan,
@@ -822,7 +695,7 @@ export const getAllUsageData = async (forceRefresh = false) => {
         monthlyTokensUsed: basicData?.totalTokens || 0,
         inputTokens: basicData?.inputTokens || 0,
         outputTokens: basicData?.outputTokens || 0,
-        charactersProcessed: 0, // 간단화
+        charactersProcessed: 0,
         messageCount: basicData?.messageCount || 0,
         lastUsedAt: basicData?.lastUsedAt,
         limits: PLAN_LIMITS[user.plan]?.T5 || PLAN_LIMITS.free.T5,
@@ -831,7 +704,7 @@ export const getAllUsageData = async (forceRefresh = false) => {
         monthlyTokensUsed: proData?.totalTokens || 0,
         inputTokens: proData?.inputTokens || 0,
         outputTokens: proData?.outputTokens || 0,
-        charactersProcessed: 0, // 간단화
+        charactersProcessed: 0,
         messageCount: proData?.messageCount || 0,
         lastUsedAt: proData?.lastUsedAt,
         limits: PLAN_LIMITS[user.plan]?.H8 || PLAN_LIMITS.free.H8,
@@ -839,7 +712,6 @@ export const getAllUsageData = async (forceRefresh = false) => {
     };
   } catch (error) {
     console.error("사용량 데이터 조회 실패:", error);
-    // 오류 시 기본값 반환
     const user = getCurrentUser();
     return {
       userId: user.userId,
