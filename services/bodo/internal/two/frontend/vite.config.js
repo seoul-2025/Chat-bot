@@ -13,7 +13,7 @@ export default defineConfig({
     },
   },
   server: {
-    port: 3002,
+    port: 3003,
     strictPort: true,
     open: true,
     // HTML5 History API를 위한 설정
@@ -24,6 +24,9 @@ export default defineConfig({
     sourcemap: true,
     // 번들 최적화
     rollupOptions: {
+      input: {
+        main: path.resolve(__dirname, 'index.html'),
+      },
       output: {
         // 코드 스플리팅 개선
         manualChunks: {
@@ -36,6 +39,8 @@ export default defineConfig({
     },
     // 청크 크기 경고 제한 증가
     chunkSizeWarningLimit: 1000,
+    // PDF worker 파일을 정적 자산으로 복사
+    copyPublicDir: true,
   },
   // 프리뷰 서버에서도 라우팅 지원
   preview: {
