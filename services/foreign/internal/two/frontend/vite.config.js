@@ -14,7 +14,8 @@ export default defineConfig({
   },
   server: {
     port: 3004,
-    strictPort: true,
+    host: '0.0.0.0',
+    strictPort: false,
     open: true,
     // HTML5 History API를 위한 설정
     historyApiFallback: true,
