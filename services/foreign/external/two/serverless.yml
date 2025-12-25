@@ -1,0 +1,61 @@
+service: f1-two-backend
+
+provider:
+  name: aws
+  runtime: python3.11
+  region: us-east-1
+  stage: ${opt:stage, 'dev'}
+  environment:
+    ANTHROPIC_API_KEY: ${env:ANTHROPIC_API_KEY}
+    STAGE: ${self:provider.stage}
+    REGION: ${self:provider.region}
+
+functions:
+  main:
+    handler: handlers.websocket.message.handler
+    timeout: 300
+    memorySize: 1024
+    events:
+      - http:
+          path: /f1/message
+          method: post
+          cors: true
+      - websocket:
+          route: $connect
+      - websocket:
+          route: $disconnect
+      - websocket:
+          route: message
+
+  conversation:
+    handler: handlers.api.conversation.handler
+    timeout: 30
+    memorySize: 512
+    events:
+      - http:
+          path: /f1/conversation
+          method: post
+          cors: true
+      - http:
+          path: /f1/conversation/{id}
+          method: get
+          cors: true
+
+  health:
+    handler: handlers.api.health.handler
+    timeout: 10
+    memorySize: 128
+    events:
+      - http:
+          path: /f1/health
+          method: get
+          cors: true
+
+plugins:
+  - serverless-python-requirements
+
+custom:
+  pythonRequirements:
+    dockerizePip: false
+    slim: true
+    strip: false

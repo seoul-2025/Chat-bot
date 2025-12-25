@@ -13,7 +13,7 @@ export default defineConfig({
     },
   },
   server: {
-    port: 3000,
+    port: 3003,
     strictPort: true,
     open: true,
     // HTML5 History API를 위한 설정

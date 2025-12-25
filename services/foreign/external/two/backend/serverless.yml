@@ -1,0 +1,85 @@
+service: f1-two-backend
+
+provider:
+  name: aws
+  runtime: python3.11
+  region: us-east-1
+  stage: ${opt:stage, 'dev'}
+  environment:
+    ANTHROPIC_API_KEY: ${env:ANTHROPIC_API_KEY}
+    STAGE: ${self:provider.stage}
+    REGION: ${self:provider.region}
+
+functions:
+  # API 핸들러
+  conversation-api:
+    handler: handlers.api.conversation.handler
+    timeout: 30
+    memorySize: 512
+    events:
+      - http:
+          path: /api/conversation
+          method: post
+          cors: true
+      - http:
+          path: /api/conversation/{id}
+          method: get
+          cors: true
+
+  prompt-crud:
+    handler: handlers.api.prompt.handler
+    timeout: 30
+    memorySize: 256
+    events:
+      - http:
+          path: /api/prompts
+          method: get
+          cors: true
+      - http:
+          path: /api/prompts
+          method: post
+          cors: true
+
+  usage-handler:
+    handler: handlers.api.usage.handler
+    timeout: 30
+    memorySize: 256
+    events:
+      - http:
+          path: /api/usage
+          method: get
+          cors: true
+
+  # WebSocket 핸들러
+  websocket-connect:
+    handler: handlers.websocket.connect.handler
+    timeout: 30
+    memorySize: 256
+    events:
+      - websocket:
+          route: $connect
+
+  websocket-disconnect:
+    handler: handlers.websocket.disconnect.handler
+    timeout: 30
+    memorySize: 256
+    events:
+      - websocket:
+          route: $disconnect
+
+  websocket-message:
+    handler: handlers.websocket.message.handler
+    timeout: 300
+    memorySize: 1024
+    events:
+      - websocket:
+          route: message
+
+plugins:
+  - serverless-python-requirements
+
+custom:
+  pythonRequirements:
+    dockerizePip: false
+    slim: true
+    strip: false
