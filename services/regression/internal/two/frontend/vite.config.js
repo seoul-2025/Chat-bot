@@ -13,11 +13,32 @@ export default defineConfig({
     },
   },
   server: {
-    port: 3000,
+    port: 3002,
     strictPort: true,
     open: true,
     // HTML5 History API를 위한 설정
     historyApiFallback: true,
+    // CORS 문제 해결을 위한 프록시 설정
+    proxy: {
+      '/prompts': {
+        target: 'https://t75vorhge1.execute-api.us-east-1.amazonaws.com/prod',
+        changeOrigin: true,
+        secure: true,
+        rewrite: (path) => path
+      },
+      '/conversations': {
+        target: 'https://t75vorhge1.execute-api.us-east-1.amazonaws.com/prod',
+        changeOrigin: true,
+        secure: true,
+        rewrite: (path) => path
+      },
+      '/usage': {
+        target: 'https://t75vorhge1.execute-api.us-east-1.amazonaws.com/prod',
+        changeOrigin: true,
+        secure: true,
+        rewrite: (path) => path
+      }
+    }
   },
   build: {
     outDir: "dist",

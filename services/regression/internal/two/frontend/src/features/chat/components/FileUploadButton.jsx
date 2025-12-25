@@ -2,9 +2,11 @@ import React, { useRef, useState, forwardRef, useImperativeHandle } from 'react'
 import { PaperClipIcon } from '@heroicons/react/24/outline';
 import * as pdfjsLib from 'pdfjs-dist';
 
-// PDF.js worker 설정 - 로컬 파일 사용
+// PDF.js worker 설정 - 로컬 파일 사용 (안정적)
 if (typeof window !== 'undefined' && pdfjsLib) {
+  // 로컬 worker 파일 사용
   pdfjsLib.GlobalWorkerOptions.workerSrc = '/pdf.worker.min.js';
+  console.log('PDF.js Version:', pdfjsLib.version);
   console.log('PDF.js Worker URL (Local):', pdfjsLib.GlobalWorkerOptions.workerSrc);
 }
 

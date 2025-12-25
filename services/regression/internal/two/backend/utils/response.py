@@ -9,13 +9,13 @@ from typing import Any, Dict, Optional
 class APIResponse:
     """API 응답 생성 헬퍼"""
     
-    # 기본 CORS 헤더
+    # 기본 CORS 헤더 - 여러 도메인 허용
     CORS_HEADERS = {
         'Content-Type': 'application/json',
-        'Access-Control-Allow-Origin': 'https://r1.sedaily.ai',
+        'Access-Control-Allow-Origin': '*',  # 모든 도메인 허용으로 변경
         'Access-Control-Allow-Headers': 'Content-Type,X-Amz-Date,Authorization,X-Api-Key,X-Amz-Security-Token,X-User-Id',
         'Access-Control-Allow-Methods': 'GET,POST,PUT,DELETE,OPTIONS,PATCH',
-        'Access-Control-Allow-Credentials': 'true'
+        'Access-Control-Allow-Credentials': 'false'  # * 사용 시 false로 설정
     }
     
     @classmethod
