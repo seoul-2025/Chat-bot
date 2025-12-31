@@ -14,7 +14,9 @@
     "serve:chat": "serve -s dist-chat -p 3004",
     "deploy:chat": "chmod +x scripts/deploy-chat-only.sh && ./scripts/deploy-chat-only.sh",
     "server": "node server.js",
-    "dev:full": "concurrently \"npm run server\" \"npm run dev\""
+    "proxy": "node proxy-server.js",
+    "dev:full": "concurrently \"npm run server\" \"npm run dev\"",
+    "dev:with-proxy": "concurrently \"npm run proxy\" \"npm run dev\""
   },
   "dependencies": {
     "@aws-amplify/auth": "^6.15.0",
@@ -52,6 +54,7 @@
     "autoprefixer": "^10.4.14",
     "concurrently": "^7.6.0",
     "cors": "^2.8.5",
+    "dotenv": "^16.4.5",
     "express": "^4.22.1",
     "node-fetch": "^3.3.2",
     "postcss": "^8.4.27",

@@ -18,7 +18,7 @@ import {
 
 const ChatInput = forwardRef(
   (
-    { onSendMessage, onStartChat, onTitlesGenerated, engineType = "11" },
+    { onSendMessage, onStartChat, onTitlesGenerated, engineType = "11", showModelSelector = false },
     ref
   ) => {
     const [message, setMessage] = useState("");
@@ -30,6 +30,24 @@ const ChatInput = forwardRef(
     const textareaRef = useRef(null);
     const fileUploadRef = useRef(null);
     const dragCounterRef = useRef(0);
+    
+    // Claude 모델 선택 상태 (MainContent에서만 사용)
+    const [selectedModel, setSelectedModel] = useState('claude-opus-4-5-20251101');
+    const [isModelDropdownOpen, setIsModelDropdownOpen] = useState(false);
+
+    // 드롭다운 외부 클릭 시 닫기
+    useEffect(() => {
+      const handleClickOutside = (event) => {
+        if (isModelDropdownOpen && !event.target.closest('.model-dropdown')) {
+          setIsModelDropdownOpen(false);
+        }
+      };
+
+      document.addEventListener('mousedown', handleClickOutside);
+      return () => {
+        document.removeEventListener('mousedown', handleClickOutside);
+      };
+    }, [isModelDropdownOpen]);
 
     // WebSocket 연결 관리
     useEffect(() => {
@@ -211,6 +229,10 @@ const ChatInput = forwardRef(
             console.log("💾 파일 데이터 localStorage 저장:", fileData.length, "개");
           }
           
+          // 선택된 모델도 localStorage에 저장
+          localStorage.setItem('selectedModel', selectedModel);
+          console.log("🎯 선택된 모델 저장:", selectedModel);
+          
           console.log("🔀 ChatPage로 네비게이션 - 메시지:", messageText);
           // 메시지 초기화를 먼저 하여 중복 호출 방지
           setMessage("");
@@ -227,7 +249,7 @@ const ChatInput = forwardRef(
           }, 100);
           
           // 사용자 텍스트만 전달 (파일은 localStorage로 분리)
-          onStartChat(messageText);
+          onStartChat(messageText, selectedModel);
           
           return; // 여기서 종료
         }
@@ -268,7 +290,7 @@ const ChatInput = forwardRef(
             }
             
             console.log(`${engineType} 엔진으로 메시지 전송:`, fullMessage);
-            await sendChatMessage(fullMessage, engineType);
+            await sendChatMessage(fullMessage, engineType, [], currentConversationId, userMessage.idempotencyKey, selectedModel);
 
             // WebSocket 응답은 별도의 리스너에서 처리
             // onTitlesGenerated는 WebSocket 메시지 핸들러에서 호출됨
@@ -535,6 +557,81 @@ const ChatInput = forwardRef(
                   />
                 </div>
               </div>
+
+              {/* Claude Model Selector - 화살표 버튼 왼쪽 */}
+              {showModelSelector && (
+                <div className="relative shrink-0 model-dropdown">
+                  <button
+                    onClick={() => setIsModelDropdownOpen(!isModelDropdownOpen)}
+                    className="inline-flex items-center justify-center gap-1 px-2 py-1.5 text-xs font-medium rounded-md border transition-colors"
+                    style={{
+                      backgroundColor: "hsl(var(--bg-100))",
+                      borderColor: "hsl(var(--border-300)/25%)",
+                      color: "hsl(var(--text-300))",
+                    }}
+                  >
+                    <span className="truncate max-w-20">
+                      {selectedModel === 'claude-opus-4-5-20251101' ? 'Opus 4.5' :
+                       selectedModel === 'claude-sonnet-4-5-20250929' ? 'Sonnet 4.5' :
+                       selectedModel === 'claude-haiku-4-5-20251001' ? 'Haiku 4.5' : 'Opus 4.5'}
+                    </span>
+                    <svg
+                      className={`w-3 h-3 transition-transform ${
+                        isModelDropdownOpen ? 'rotate-180' : ''
+                      }`}
+                      fill="none"
+                      stroke="currentColor"
+                      viewBox="0 0 24 24"
+                    >
+                      <path
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        strokeWidth={2}
+                        d="M19 9l-7 7-7-7"
+                      />
+                    </svg>
+                  </button>
+                  
+                  {/* Dropdown Menu */}
+                  {isModelDropdownOpen && (
+                    <div
+                      className="absolute top-full mt-2 left-0 z-50 rounded-lg border shadow-lg"
+                      style={{
+                        minWidth: "227px",
+                        backgroundColor: "hsl(var(--bg-000))",
+                        borderColor: "hsl(var(--border-300)/25%)",
+                        boxShadow: "0 4px 12px hsl(var(--always-black)/10%)",
+                      }}
+                    >
+                      <div className="p-1">
+                        {[
+                          { id: 'claude-opus-4-5-20251101', name: 'Opus 4.5', desc: 'Most capable for complex work' },
+                          { id: 'claude-sonnet-4-5-20250929', name: 'Sonnet 4.5', desc: 'Best for everyday tasks' },
+                          { id: 'claude-haiku-4-5-20251001', name: 'Haiku 4.5', desc: 'Fastest for quick answers' }
+                        ].map((model) => (
+                          <button
+                            key={model.id}
+                            onClick={() => {
+                              setSelectedModel(model.id);
+                              setIsModelDropdownOpen(false);
+                            }}
+                            className={`w-full text-left px-3 py-2 rounded-md transition-colors ${
+                              selectedModel === model.id
+                                ? 'bg-accent-main-100/10 text-accent-main-100'
+                                : 'hover:bg-bg-100 text-text-100'
+                            }`}
+                          >
+                            <div className="flex flex-col">
+                              <span className="text-sm font-medium">{model.name}</span>
+                              <span className="text-xs opacity-70">{model.desc}</span>
+                            </div>
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )}
 
               {/* Connection Status Indicator */}
               <div className="flex items-center gap-1">

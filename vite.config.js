@@ -33,7 +33,9 @@ export default defineConfig({
   },
   // 개발 및 프리뷰 서버에서 라우팅 지원
   server: {
-    port: 4000,
+    port: 3001,
+    strictPort: true,
+    host: '0.0.0.0',
     historyApiFallback: true,
   },
   preview: {

@@ -12,11 +12,11 @@ class ClaudeService {
   }
 
   // 스트리밍 채팅 응답
-  async streamChat(message, onChunk, onComplete, onError) {
-    // 개발 환경에서 모의 응답 사용
-    if (import.meta.env.DEV && import.meta.env.VITE_USE_MOCK_API !== 'false') {
+  async streamChat(message, selectedModel, onChunk, onComplete, onError) {
+    // 실제 API 사용
+    if (false) {
       console.log('🔧 개발 모드: 모의 Claude 응답 사용');
-      this.simulateStreamingResponse(message, onChunk, onComplete);
+      this.simulateStreamingResponse(message, selectedModel, onChunk, onComplete);
       return;
     }
 
@@ -28,15 +28,25 @@ class ClaudeService {
     try {
       console.log('🤖 Claude API 프록시 호출 시작:', { messageLength: message.length });
 
+      // 프록시 서버 연결 확인
+      const healthCheck = await fetch('http://127.0.0.1:5000/health', { 
+        method: 'GET',
+        signal: AbortSignal.timeout(2000)
+      }).catch(() => null);
+      
+      if (!healthCheck) {
+        throw new Error('프록시 서버(localhost:5000)에 연결할 수 없습니다. npm run proxy로 프록시 서버를 실행해주세요.');
+      }
+
       // 로컬 프록시 서버를 통해 Claude API 호출
-      const response = await fetch('http://localhost:3001/api/claude/chat', {
+      const response = await fetch('http://127.0.0.1:5000/api/claude/chat', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json'
         },
         body: JSON.stringify({
           message: message,
-          apiKey: this.apiKey
+          model: selectedModel
         })
       });
 
@@ -92,8 +102,14 @@ class ClaudeService {
   }
 
   // 모의 스트리밍 응답 (개발용)
-  simulateStreamingResponse(message, onChunk, onComplete) {
+  simulateStreamingResponse(message, selectedModel, onChunk, onComplete) {
+    const modelName = selectedModel === 'claude-opus-4-5-20251101' ? 'Opus 4.5' :
+                     selectedModel === 'claude-sonnet-4-5-20250929' ? 'Sonnet 4.5' :
+                     selectedModel === 'claude-haiku-4-5-20251001' ? 'Haiku 4.5' : 'Opus 4.5';
+                     
     const mockResponse = `안녕하세요! 업로드하신 파일을 확인했습니다.
+
+현재 사용 중인 모델: **${modelName}**
 
 파일 내용을 분석한 결과:
 - 파일 형식: ${message.includes('pdf') ? 'PDF' : message.includes('image') ? '이미지' : '텍스트'}
@@ -112,7 +128,7 @@ class ClaudeService {
         clearInterval(interval);
         onComplete(index);
       }
-    }, 50); // 50ms마다 한 글자씩
+    }, 20); // 20ms마다 한 글자씩
   }
 
   // 일반 채팅 응답 (스트리밍 없음)

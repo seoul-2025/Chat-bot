@@ -33,6 +33,10 @@ const MainContent = ({
     );
     return cachedValue ? parseInt(cachedValue) : 0;
   });
+  
+  // Claude 모델 선택 상태
+  const [selectedModel, setSelectedModel] = useState('claude-opus-4-5-20251101');
+  const [isModelDropdownOpen, setIsModelDropdownOpen] = useState(false);
 
   const dropdownRef = useRef(null);
   const dragCounterRef = useRef(0);
@@ -69,10 +73,14 @@ const MainContent = ({
       if (dropdownRef.current && !dropdownRef.current.contains(event.target)) {
         setShowDropdown(false);
       }
+      // 모델 드롭다운 외부 클릭 시 닫기
+      if (isModelDropdownOpen && !event.target.closest('.model-dropdown')) {
+        setIsModelDropdownOpen(false);
+      }
     };
     document.addEventListener("mousedown", handleClickOutside);
     return () => document.removeEventListener("mousedown", handleClickOutside);
-  }, []);
+  }, [isModelDropdownOpen]);
 
   const handleTitlesGenerated = () => {};
 
@@ -168,6 +176,7 @@ const MainContent = ({
                   onStartChat={onStartChat}
                   onTitlesGenerated={handleTitlesGenerated}
                   engineType={selectedEngine}
+                  showModelSelector={true}
                 />
               </div>
             </section>

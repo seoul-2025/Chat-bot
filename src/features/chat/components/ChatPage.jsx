@@ -450,10 +450,40 @@ const ChatPage = ({
   const chunkBuffer = useRef(new Map()); // 청크 버퍼 (index -> chunk 내용)
   const processBufferTimeoutRef = useRef(null); // 버퍼 처리 타임아웃
   const lastUserMessageRef = useRef(null); // 마지막 사용자 메시지 추적
+  
+  // Claude 모델 선택 상태
+  const [selectedModel, setSelectedModel] = useState(() => {
+    // location.state에서 먼저 확인
+    if (location.state?.selectedModel) {
+      return location.state.selectedModel;
+    }
+    // localStorage에서 복원
+    const savedModel = localStorage.getItem('selectedModel');
+    if (savedModel) {
+      return savedModel;
+    }
+    // 기본값
+    return 'claude-opus-4-5-20251101';
+  });
+  const [isModelDropdownOpen, setIsModelDropdownOpen] = useState(false);
 
   // 🔑 핵심 개선: 실시간 데이터 추적을 위한 ref
   const streamingContentRef = useRef(""); // 스트리밍 콘텐츠 실시간 추적
   const lastAiMessageRef = useRef(null); // 마지막 AI 메시지 추적
+
+  // 드롭다운 외부 클릭 시 닫기
+  useEffect(() => {
+    const handleClickOutside = (event) => {
+      if (isModelDropdownOpen && !event.target.closest('.model-dropdown')) {
+        setIsModelDropdownOpen(false);
+      }
+    };
+
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+    };
+  }, [isModelDropdownOpen]);
 
   // 청크 버퍼 처리 함수
   const processChunkBuffer = () => {
@@ -1209,7 +1239,8 @@ const ChatPage = ({
                     selectedEngine,
                     [],
                     currentConversationId,
-                    userMessage?.idempotencyKey || crypto.randomUUID()
+                    userMessage?.idempotencyKey || crypto.randomUUID(),
+                    selectedModel
                   );
                   sendSuccess = true;
                   console.log("✅ Initial message 전송 완료");
@@ -1457,7 +1488,8 @@ const ChatPage = ({
           selectedEngine,
           [], // 대화 히스토리 제거 - 마지막 메시지만 처리
           currentConversationId,
-          userMessage.idempotencyKey
+          userMessage.idempotencyKey,
+          selectedModel
         );
 
         // WebSocket 응답은 메시지 핸들러에서 처리됨
@@ -1474,7 +1506,8 @@ const ChatPage = ({
           selectedEngine,
           [], // 대화 히스토리 제거 - 마지막 메시지만 처리
           currentConversationId,
-          userMessage.idempotencyKey
+          userMessage.idempotencyKey,
+          selectedModel
         );
       }
     } catch (err) {
@@ -1952,6 +1985,80 @@ const ChatPage = ({
                         onFileContent={handleFileContent}
                         disabled={false}
                       />
+                    </div>
+                    
+                    {/* Claude Model Selector */}
+                    <div className="relative shrink-0 model-dropdown">
+                      <button
+                        onClick={() => setIsModelDropdownOpen(!isModelDropdownOpen)}
+                        className="inline-flex items-center justify-center gap-1 px-2 py-1.5 text-xs font-medium rounded-md border transition-colors"
+                        style={{
+                          backgroundColor: "hsl(var(--bg-100))",
+                          borderColor: "hsl(var(--border-300)/25%)",
+                          color: "hsl(var(--text-300))",
+                        }}
+                      >
+                        <span className="truncate max-w-20">
+                          {selectedModel === 'claude-opus-4-5-20251101' ? 'Opus 4.5' :
+                           selectedModel === 'claude-sonnet-4-5-20250929' ? 'Sonnet 4.5' :
+                           selectedModel === 'claude-haiku-4-5-20251001' ? 'Haiku 4.5' : 'Opus 4.5'}
+                        </span>
+                        <svg
+                          className={`w-3 h-3 transition-transform ${
+                            isModelDropdownOpen ? 'rotate-180' : ''
+                          }`}
+                          fill="none"
+                          stroke="currentColor"
+                          viewBox="0 0 24 24"
+                        >
+                          <path
+                            strokeLinecap="round"
+                            strokeLinejoin="round"
+                            strokeWidth={2}
+                            d="M19 9l-7 7-7-7"
+                          />
+                        </svg>
+                      </button>
+                      
+                      {/* Dropdown Menu */}
+                      {isModelDropdownOpen && (
+                        <div
+                          className="absolute bottom-full mb-2 left-0 z-50 rounded-lg border shadow-lg"
+                          style={{
+                            minWidth: "220px",
+                            backgroundColor: "hsl(var(--bg-000))",
+                            borderColor: "hsl(var(--border-300)/25%)",
+                            boxShadow: "0 4px 12px hsl(var(--always-black)/10%)",
+                          }}
+                        >
+                          <div className="p-1">
+                            {[
+                              { id: 'claude-opus-4-5-20251101', name: 'Opus 4.5', desc: 'Most capable for complex work' },
+                              { id: 'claude-sonnet-4-5-20250929', name: 'Sonnet 4.5', desc: 'Best for everyday tasks' },
+                              { id: 'claude-haiku-4-5-20251001', name: 'Haiku 4.5', desc: 'Fastest for quick answers' }
+                            ].map((model) => (
+                              <button
+                                key={model.id}
+                                onClick={() => {
+                                  setSelectedModel(model.id);
+                                  localStorage.setItem('selectedModel', model.id);
+                                  setIsModelDropdownOpen(false);
+                                }}
+                                className={`w-full text-left px-3 py-2 rounded-md transition-colors ${
+                                  selectedModel === model.id
+                                    ? 'bg-accent-main-100/10 text-accent-main-100'
+                                    : 'hover:bg-bg-100 text-text-100'
+                                }`}
+                              >
+                                <div className="flex flex-col">
+                                  <span className="text-sm font-medium">{model.name}</span>
+                                  <span className="text-xs opacity-70">{model.desc}</span>
+                                </div>
+                              </button>
+                            ))}
+                          </div>
+                        </div>
+                      )}
                     </div>
                   </div>
 

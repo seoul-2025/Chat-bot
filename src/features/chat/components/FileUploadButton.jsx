@@ -207,21 +207,6 @@ const FileUploadButton = forwardRef(({ onFileContent, disabled }, ref) => {
           파일 처리 중...
         </div>
       )}
-
-      {/* 업로드된 파일 목록 표시 */}
-      {uploadedFiles.length > 0 && (
-        <div className="absolute bottom-full left-0 mb-2 p-2 bg-white dark:bg-gray-800 border rounded-lg shadow-lg z-50 min-w-64">
-          <div className="text-xs font-medium text-gray-600 dark:text-gray-300 mb-1">
-            업로드된 파일 ({uploadedFiles.length}개)
-          </div>
-          {uploadedFiles.slice(-3).map((file) => (
-            <div key={file.id} className="flex items-center justify-between text-xs text-gray-500 dark:text-gray-400 py-1">
-              <span className="truncate flex-1">{file.name}</span>
-              <span className="ml-2 text-gray-400">{file.sizeFormatted}</span>
-            </div>
-          ))}
-        </div>
-      )}
     </div>
   );
 });

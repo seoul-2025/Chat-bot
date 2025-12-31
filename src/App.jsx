@@ -110,8 +110,8 @@ function AppContent() {
     }));
   };
 
-  const handleStartChat = (message) => {
-    console.log("🚀 handleStartChat called with:", message);
+  const handleStartChat = (message, selectedModel) => {
+    console.log("🚀 handleStartChat called with:", message, "model:", selectedModel);
 
     // 새 대화 ID 생성 (엔진_타임스탬프 형식)
     const conversationId = `${selectedEngine}_${Date.now()}`;
@@ -120,11 +120,14 @@ function AppContent() {
     // localStorage에 임시 저장 (페이지 전환 중 데이터 보존)
     localStorage.setItem("pendingMessage", message);
     localStorage.setItem("pendingConversationId", conversationId);
+    if (selectedModel) {
+      localStorage.setItem("selectedModel", selectedModel);
+    }
 
     // conversationId를 포함한 URL로 이동
     const enginePath = selectedEngine.toLowerCase();
     navigate(`/${enginePath}/chat/${conversationId}`, {
-      state: { initialMessage: message },
+      state: { initialMessage: message, selectedModel },
     });
 
     console.log(

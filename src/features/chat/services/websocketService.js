@@ -197,12 +197,13 @@ class WebSocketService {
     engineType = "11",
     conversationId = null,
     conversationHistory = null,
-    idempotencyKey = null
+    idempotencyKey = null,
+    selectedModel = 'claude-opus-4-5-20251101'
   ) {
     return new Promise((resolve, reject) => {
       // 모든 환경에서 모의 응답 사용 (REST API 모드)
       console.log("🔧 REST API 모드: 모의 AI 응답 생성");
-      this.simulateAIResponse(message, engineType);
+      this.simulateAIResponse(message, engineType, selectedModel);
       resolve();
       return;
 
@@ -407,7 +408,7 @@ class WebSocketService {
   }
 
   // Claude API 직접 호출 또는 모의 응답 생성
-  async simulateAIResponse(message, engineType) {
+  async simulateAIResponse(message, engineType, selectedModel = 'claude-opus-4-5-20251101') {
     // Claude API 사용 여부 확인
     const useMockAPI = import.meta.env.VITE_USE_MOCK_API !== 'false';
     const hasClaudeKey = import.meta.env.VITE_CLAUDE_API_KEY && 
@@ -415,15 +416,15 @@ class WebSocketService {
 
     if (!useMockAPI && hasClaudeKey) {
       // 실제 Claude API 사용
-      await this.callClaudeAPI(message, engineType);
+      await this.callClaudeAPI(message, engineType, selectedModel);
     } else {
       // 모의 응답 사용
-      this.generateMockResponse(message, engineType);
+      this.generateMockResponse(message, engineType, selectedModel);
     }
   }
 
   // 실제 Claude API 호출
-  async callClaudeAPI(message, engineType) {
+  async callClaudeAPI(message, engineType, selectedModel) {
     try {
       // Claude 서비스 동적 import
       const { default: claudeService } = await import('./claudeService.js');
@@ -445,9 +446,10 @@ class WebSocketService {
       const systemPrompt = systemPrompts[engineType] || systemPrompts["11"];
       const fullMessage = `${systemPrompt}\n\n분석할 내용:\n${message}`;
 
-      // Claude API 스트리밍 호출
+      // Claude API 스트리밍 호출 (선택된 모델 사용)
       await claudeService.streamChat(
         fullMessage,
+        selectedModel,
         // onChunk
         (chunk, chunkIndex) => {
           this.messageHandlers.forEach((handler) => {
@@ -483,12 +485,12 @@ class WebSocketService {
     } catch (error) {
       console.error('Claude API 호출 실패:', error);
       // 오류 시 모의 응답으로 폴백
-      this.generateMockResponse(message, engineType);
+      this.generateMockResponse(message, engineType, selectedModel);
     }
   }
 
   // 모의 응답 생성
-  generateMockResponse(message, engineType) {
+  generateMockResponse(message, engineType, selectedModel = 'claude-opus-4-5-20251101') {
     // AI 시작 신호
     setTimeout(() => {
       this.messageHandlers.forEach((handler) => {
@@ -518,6 +520,8 @@ class WebSocketService {
 
 입력하신 내용: "${userTextOnly}"
 
+현재 사용 중인 모델: **${selectedModel}**
+
 🔧 **개발 모드 안내**
 현재 모의 응답을 사용 중입니다. 실제 Claude AI를 사용하려면:
 
@@ -529,6 +533,8 @@ Claude API 키는 https://console.anthropic.com 에서 발급받을 수 있습�
       "22": `안녕하세요! 정부/공공기관 보도자료 분석 엔진입니다.
 
 입력하신 내용: "${userTextOnly}"
+
+현재 사용 중인 모델: **${selectedModel}**
 
 🔧 **개발 모드 안내**
 현재 모의 응답을 사용 중입니다. 실제 Claude AI를 사용하려면:
@@ -602,14 +608,16 @@ export const sendChatMessage = (
   engineType,
   conversationHistory,
   conversationId,
-  idempotencyKey
+  idempotencyKey,
+  selectedModel
 ) =>
   webSocketService.sendMessage(
     message,
     engineType,
     conversationId,
     conversationHistory,
-    idempotencyKey
+    idempotencyKey,
+    selectedModel
   );
 export const isWebSocketConnected = () =>
   webSocketService.isWebSocketConnected();
