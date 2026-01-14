@@ -1,0 +1,93 @@
+# Dependencies
+node_modules/
+backend/botocore/
+backend/certifi/
+backend/certifi-2025.11.12.dist-info/
+backend/click/
+backend/click-8.3.1.dist-info/
+backend/colorama/
+backend/colorama-0.4.6.dist-info/
+backend/dateutil/
+backend/distro/
+backend/distro-1.9.0.dist-info/
+backend/filelock/
+backend/filelock-3.20.1.dist-info/
+backend/fsspec/
+backend/fsspec-2025.12.0.dist-info/
+backend/h11/
+backend/h11-0.16.0.dist-info/
+backend/hf_xet/
+backend/hf_xet-1.2.0.dist-info/
+backend/httpcore/
+backend/httpcore-1.0.9.dist-info/
+backend/httpx/
+backend/httpx-0.28.1.dist-info/
+backend/huggingface_hub/
+backend/huggingface_hub-1.2.3.dist-info/
+backend/idna/
+backend/idna-3.11.dist-info/
+backend/jmespath/
+backend/jmespath-1.0.1.dist-info/
+backend/packaging/
+backend/packaging-25.0.dist-info/
+backend/pydantic/
+backend/pydantic-2.12.5.dist-info/
+backend/pydantic_core/
+backend/pydantic_core-2.41.5.dist-info/
+backend/python_dateutil-2.9.0.post0.dist-info/
+backend/pyyaml-6.0.3.dist-info/
+backend/s3transfer/
+backend/s3transfer-0.9.0.dist-info/
+backend/shellingham/
+backend/shellingham-1.5.4.dist-info/
+backend/six-1.17.0.dist-info/
+backend/sniffio/
+backend/sniffio-1.3.1.dist-info/
+backend/tokenizers/
+backend/tokenizers-0.22.1.dist-info/
+backend/tqdm/
+backend/tqdm-4.67.1.dist-info/
+backend/typer/
+backend/typer_slim-0.20.1.dist-info/
+backend/typing_extensions-4.15.0.dist-info/
+backend/typing_inspection/
+backend/typing_inspection-0.4.2.dist-info/
+backend/urllib3/
+backend/urllib3-2.6.2.dist-info/
+backend/yaml/
+
+# Build outputs
+dist/
+dist-chat/
+
+# Environment variables
+.env
+.env.local
+.env.production
+
+# Logs
+*.log
+npm-debug.log*
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# IDE
+.vscode/
+.idea/
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.Python
+
+# Lambda packages
+lambda_function.zip
+lambda_function.tar.gz
+
+# Temporary files
+/tmp/
+*.tmp

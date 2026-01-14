@@ -1,0 +1,12 @@
+{
+  "name": "claude-api-lambda",
+  "version": "1.0.0",
+  "type": "module",
+  "main": "lambda-handler.js",
+  "dependencies": {
+    "@vendia/serverless-express": "^4.12.6",
+    "express": "^4.22.1",
+    "cors": "^2.8.5",
+    "node-fetch": "^3.3.2"
+  }
+}
